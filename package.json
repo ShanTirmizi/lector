@@ -1,0 +1,24 @@
+{
+  "name": "lector",
+  "version": "0.1.0",
+  "description": "A Chrome extension that reads web pages aloud with a natural voice that runs on your own machine.",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "watch": "node scripts/build.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "node scripts/e2e.mjs"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "^3.8.1",
+    "kokoro-js": "^1.2.1"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.3.5",
+    "esbuild": "^0.28.2",
+    "playwright-core": "^1.64.0",
+    "typescript": "^7.0.2"
+  }
+}

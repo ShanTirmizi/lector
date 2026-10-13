@@ -1,0 +1,32 @@
+{
+  "manifest_version": 3,
+  "name": "Lector — Read Aloud",
+  "short_name": "Lector",
+  "version": "0.1.0",
+  "description": "Reads web pages aloud in a natural voice that runs on your own machine, and highlights each word as it is spoken.",
+  "minimum_chrome_version": "116",
+  "permissions": ["offscreen", "contextMenus", "storage", "unlimitedStorage"],
+  "host_permissions": ["<all_urls>"],
+  "background": { "service_worker": "background.js", "type": "module" },
+  "content_scripts": [
+    { "matches": ["<all_urls>"], "js": ["content.js"], "run_at": "document_idle" }
+  ],
+  "action": { "default_title": "Read this page aloud" },
+  "options_ui": { "page": "options.html", "open_in_tab": true },
+  "commands": {
+    "toggle-reading": {
+      "suggested_key": { "default": "Alt+R" },
+      "description": "Play or pause reading"
+    },
+    "read-selection": {
+      "suggested_key": { "default": "Alt+Shift+R" },
+      "description": "Read the selected text"
+    },
+    "stop-reading": {
+      "description": "Stop reading and close the player"
+    }
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  }
+}
