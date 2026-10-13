@@ -81,6 +81,8 @@ On a Mac, `Alt` is the Option key. The first two can be changed at
 - **Highlighting.** The CSS Custom Highlight API colours ranges of text without
   changing the page's HTML (`src/content/highlight.ts`).
 
+A longer walkthrough with diagrams is in [docs/how-it-works.html](docs/how-it-works.html).
+
 ## Privacy
 
 - Text is turned into speech on your machine. It is not sent to any server.

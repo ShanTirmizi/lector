@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>How Lector works</title>
+<style>
+  :root {
+    --green: #173f35; --deep: #0f2d26; --chalk: #f2f5ee; --paper: #fdfdfb;
+    --rule: #d5ddd2; --sage: #5d7468; --marker: #ffd84d; --ink: #1c2622;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--chalk); color: var(--ink); font: 17px/1.6 ui-rounded, "SF Pro Rounded", "Segoe UI", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  main { max-width: 860px; margin: 0 auto; padding: 56px 24px 120px; }
+  h1 { margin: 0 0 8px; font-size: 44px; line-height: 1.05; letter-spacing: -0.02em; color: var(--green); }
+  h1 mark { background: var(--marker); color: var(--ink); padding: 0 8px; border-radius: 8px; }
+  .lede { max-width: 60ch; margin: 0 0 40px; font-size: 20px; color: var(--sage); }
+  h2 { margin: 64px 0 12px; font-size: 27px; line-height: 1.2; color: var(--green); }
+  h3 { margin: 28px 0 6px; font-size: 18px; color: var(--green); }
+  p, li { max-width: 68ch; }
+  ul, ol { padding-left: 22px; }
+  li { margin: 4px 0; }
+  code { font: 14px/1.4 ui-monospace, "SF Mono", Menlo, monospace; background: #e6ebe2; padding: 2px 6px; border-radius: 6px; }
+  figure { margin: 22px 0; padding: 20px; background: var(--paper); border: 1px solid var(--rule); border-radius: 18px; overflow-x: auto; }
+  figcaption { margin-top: 12px; color: var(--sage); font-size: 15px; }
+  svg { display: block; width: 100%; height: auto; min-width: 640px; font-family: inherit; }
+  .box { fill: #fff; stroke: var(--green); stroke-width: 1.6; }
+  .dark { fill: var(--green); }
+  .hl { fill: var(--marker); }
+  .t { fill: var(--ink); font-size: 14px; }
+  .tb { fill: var(--green); font-size: 15px; font-weight: 700; }
+  .tw { fill: var(--chalk); font-size: 15px; font-weight: 700; }
+  .ts { fill: var(--sage); font-size: 12.5px; }
+  .arrow { stroke: var(--green); stroke-width: 1.8; fill: none; marker-end: url(#a); }
+  .dash { stroke-dasharray: 5 5; }
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 15.5px; }
+  th, td { text-align: left; padding: 9px 12px 9px 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th { color: var(--sage); font-weight: 600; }
+  .steps { counter-reset: step; list-style: none; padding: 0; }
+  .steps li { position: relative; margin: 0 0 14px; padding-left: 46px; }
+  .steps li::before { counter-increment: step; content: counter(step); position: absolute; left: 0; top: 1px; width: 30px; height: 30px; border-radius: 50%; background: var(--green); color: var(--marker); font-weight: 700; display: grid; place-items: center; font-size: 15px; }
+  .try { margin: 18px 0; padding: 16px 20px; background: #fff8d6; border-left: 5px solid var(--marker); border-radius: 0 14px 14px 0; }
+  .try strong { color: var(--green); }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 640px) { h1 { font-size: 34px; } .two { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>How <mark>Lector</mark> works</h1>
+  <p class="lede">A Chrome extension that reads a page aloud with a voice that runs on your own machine, and marks each word as it is spoken. This page shows the parts, follows one real run, and points at the code.</p>
+
+  <svg width="0" height="0" style="position:absolute"><defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#173f35"/></marker></defs></svg>
+
+  <h2>The three parts</h2>
+  <p>Chrome gives an extension several separate places to run code. Lector uses three, because each can do something the others cannot.</p>
+  <figure>
+    <svg viewBox="0 0 800 300" role="img" aria-label="The page, the service worker and the offscreen document, and what passes between them">
+      <rect class="box" x="10" y="30" width="230" height="230" rx="16"/>
+      <text class="tb" x="28" y="58">The web page</text>
+      <text class="ts" x="28" y="76">content script</text>
+      <text class="t" x="28" y="110">Finds the article text</text>
+      <text class="t" x="28" y="134">Splits it into sentences</text>
+      <text class="t" x="28" y="158">Draws the player</text>
+      <text class="t" x="28" y="182">Highlights and scrolls</text>
+      <rect class="hl" x="28" y="204" width="150" height="26" rx="8"/>
+      <text class="t" x="38" y="222" font-weight="700">can see the page</text>
+
+      <rect class="box" x="300" y="30" width="190" height="110" rx="16"/>
+      <text class="tb" x="318" y="58">Service worker</text>
+      <text class="ts" x="318" y="76">sleeps when idle</text>
+      <text class="t" x="318" y="106">Toolbar, shortcuts, menu</text>
+      <text class="t" x="318" y="126">Starts the engine</text>
+
+      <rect class="dark" x="550" y="30" width="240" height="230" rx="16"/>
+      <text class="tw" x="568" y="58">Offscreen document</text>
+      <text x="568" y="76" fill="#a9bdb2" font-size="12.5">hidden page, stays alive</text>
+      <rect x="568" y="92" width="204" height="74" rx="10" fill="#0f2d26"/>
+      <text x="580" y="114" fill="#ffd84d" font-size="14" font-weight="700">Worker: voice model</text>
+      <text x="580" y="134" fill="#f2f5ee" font-size="13">Kokoro on WebGPU</text>
+      <text x="580" y="152" fill="#a9bdb2" font-size="12.5">text in, sound + timings out</text>
+      <rect x="568" y="178" width="204" height="62" rx="10" fill="#0f2d26"/>
+      <text x="580" y="200" fill="#ffd84d" font-size="14" font-weight="700">Audio element</text>
+      <text x="580" y="220" fill="#f2f5ee" font-size="13">plays, keeps sentences ready</text>
+
+      <path class="arrow" d="M240 70 H298"/>
+      <text class="ts" x="246" y="62">"start"</text>
+      <path class="arrow" d="M490 70 H548"/>
+      <text class="ts" x="496" y="62">creates</text>
+      <path class="arrow" d="M240 190 H548"/>
+      <text class="ts" x="318" y="182">sentences, play, pause, speed</text>
+      <path class="arrow dash" d="M548 226 H242"/>
+      <text class="ts" x="300" y="246">clock ticks + when each word starts</text>
+    </svg>
+    <figcaption>The page and the offscreen document talk over one direct connection. The service worker only has to wake the engine up.</figcaption>
+  </figure>
+  <ul>
+    <li><strong>Why not play sound in the page?</strong> Many sites forbid it with their security policy, and the 330 MB model would have to load again on every tab.</li>
+    <li><strong>Why a worker inside the offscreen document?</strong> Making speech is heavy. In a worker it cannot make the clock that drives the highlighting stutter.</li>
+  </ul>
+
+  <h2>One real run: you press Alt+R on an article</h2>
+  <ol class="steps">
+    <li><strong>The command arrives.</strong> Chrome hands the shortcut to the service worker, which sends <code>toggle</code> to the tab. <code>src/background/index.ts</code></li>
+    <li><strong>The page finds its article.</strong> Every paragraph votes for the container it sits in. The container with the most paragraph text wins. Menus, sidebars and footers are thrown out. <code>src/content/blocks.ts</code></li>
+    <li><strong>Text becomes sentences.</strong> Each one remembers exactly which characters of the page it covers. Citation markers and web addresses are cut from what is spoken, but the map back to the page stays exact. <code>src/content/segment.ts</code></li>
+    <li><strong>The sentences travel to the engine.</strong> The page asks the service worker to make sure the offscreen document exists, then connects to it and sends the whole list. <code>src/content/engine-client.ts</code></li>
+    <li><strong>The voice speaks the first sentence.</strong> Text becomes phonemes, phonemes go through the model, and out come sound samples plus how long each phoneme lasted. <code>src/offscreen/engine.ts</code></li>
+    <li><strong>Sound plays, and the next sentences are prepared.</strong> About 40 seconds of speech is kept ready ahead of you. <code>src/offscreen/index.ts</code></li>
+    <li><strong>The page lights up words.</strong> Eight times a second the engine reports the audio position. Between reports the page runs its own clock, 60 times a second, and marks whichever word has started. <code>src/content/reader.ts</code></li>
+  </ol>
+
+  <h2>How a word knows when to light up</h2>
+  <p>This is the part most read-aloud tools get from a server. Lector gets it from the model itself.</p>
+  <figure>
+    <svg viewBox="0 0 800 250" role="img" aria-label="Phoneme durations from the model are added up and matched to words">
+      <text class="ts" x="10" y="24">the text</text>
+      <g font-size="17" font-weight="700" fill="#173f35">
+        <text x="110" y="26">In</text><text x="190" y="26">2024,</text><text x="455" y="26">most</text><text x="560" y="26">of</text><text x="620" y="26">the</text><text x="700" y="26">routes</text>
+      </g>
+      <text class="ts" x="10" y="84">what the voice says</text>
+      <g font-size="15" fill="#1c2622">
+        <text x="110" y="86">ɪn</text><text x="170" y="86">twˈɛnti</text><text x="250" y="86">twˈɛnti</text><text x="330" y="86">fˈoːɹ</text><text x="455" y="86">mˈoʊst</text><text x="570" y="86">ʌvðə</text><text x="700" y="86">ɹˈuːts</text>
+      </g>
+      <path class="arrow" d="M118 34 V66"/><path class="arrow" d="M212 34 L200 66"/><path class="arrow" d="M215 34 L275 66"/><path class="arrow" d="M218 34 L345 66"/>
+      <path class="arrow" d="M475 34 V66"/><path class="arrow" d="M568 34 L585 66"/><path class="arrow" d="M632 34 L600 66"/><path class="arrow" d="M722 34 V66"/>
+      <text class="ts" x="10" y="150">how long each sound lasts</text>
+      <g>
+        <rect x="110" y="128" width="34" height="30" rx="5" fill="#cfe0d6"/>
+        <rect x="170" y="128" width="62" height="30" rx="5" fill="#ffd84d"/><rect x="250" y="128" width="64" height="30" rx="5" fill="#ffd84d"/><rect x="330" y="128" width="78" height="30" rx="5" fill="#ffd84d"/>
+        <rect x="455" y="128" width="84" height="30" rx="5" fill="#cfe0d6"/>
+        <rect x="570" y="128" width="34" height="30" rx="5" fill="#9fc3b0"/><rect x="606" y="128" width="38" height="30" rx="5" fill="#cfe0d6"/>
+        <rect x="700" y="128" width="88" height="30" rx="5" fill="#9fc3b0"/>
+      </g>
+      <text class="ts" x="10" y="214">when each word starts</text>
+      <g font-size="14" fill="#173f35" font-weight="700">
+        <text x="110" y="216">0.05s</text><text x="190" y="216">0.18s</text><text x="455" y="216">1.38s</text><text x="560" y="216">1.74s</text><text x="620" y="216">1.82s</text><text x="700" y="216">1.93s</text>
+      </g>
+      <path d="M110 176 H788" stroke="#173f35" stroke-width="1.4"/>
+      <text class="ts" x="170" y="192">one word, three spoken words</text>
+      <text class="ts" x="540" y="192">two words, one sound</text>
+    </svg>
+    <figcaption>The model says how long every phoneme lasts. Adding those up gives the moment each sound begins. The hard part is matching sounds back to words.</figcaption>
+  </figure>
+  <ul>
+    <li><strong>Easy case:</strong> the text and the phoneme string have the same number of words. Pair them in order.</li>
+    <li><strong>Hard case:</strong> "2024" becomes three spoken words, and "of the" becomes one. Lector then phonemises each word on its own and lines that sequence up against the real one with an edit-distance alignment, the same idea a spell checker uses. <code>src/offscreen/align.ts</code></li>
+    <li><strong>Speed does not change any of this.</strong> The audio is made once at normal speed. The browser plays it faster with the pitch kept, and the timings are simply scaled.</li>
+  </ul>
+
+  <h2>Highlighting without touching the page</h2>
+  <div class="two">
+    <div>
+      <p>The obvious way to highlight a word is to wrap it in a coloured element. That changes the page's HTML, which breaks sites built with frameworks that own their own DOM.</p>
+      <p>Lector uses the <strong>CSS Custom Highlight API</strong> instead. It is given a range of characters and a colour, and the browser paints it. The page's HTML is never changed.</p>
+    </div>
+    <div>
+      <p>For this to work every character of the extracted text needs a way back to the page. A block keeps two arrays the same length as its text:</p>
+      <ul>
+        <li>which text node each character came from</li>
+        <li>its offset inside that node</li>
+      </ul>
+      <p>That is why a citation marker in the middle of a sentence is skipped by the voice and by the highlight alike.</p>
+    </div>
+  </div>
+
+  <h2>PDFs and Google Docs</h2>
+  <figure>
+    <svg viewBox="0 0 800 210" role="img" aria-label="A PDF page of loose text fragments becomes paragraphs">
+      <rect class="box" x="10" y="10" width="250" height="190" rx="12"/>
+      <text class="ts" x="24" y="32">Running title</text>
+      <g fill="#cfe0d6"><rect x="24" y="48" width="210" height="10" rx="3"/><rect x="24" y="64" width="222" height="10" rx="3"/><rect x="24" y="80" width="140" height="10" rx="3"/>
+      <rect x="40" y="106" width="206" height="10" rx="3"/><rect x="24" y="122" width="222" height="10" rx="3"/><rect x="24" y="138" width="180" height="10" rx="3"/></g>
+      <text class="ts" x="126" y="188">12</text>
+      <text class="tb" x="24" y="-4"></text>
+      <path class="arrow" d="M270 105 H330"/>
+      <text class="ts" x="272" y="96">geometry</text>
+      <rect class="box" x="340" y="10" width="450" height="190" rx="12"/>
+      <text class="t" x="358" y="40"><tspan font-weight="700">Same baseline</tspan> → same line</text>
+      <text class="t" x="358" y="66"><tspan font-weight="700">Bigger gap, an indent, a new font size</tspan> → new paragraph</text>
+      <text class="t" x="358" y="92"><tspan font-weight="700">Line ends in a hyphen</tspan> → the word is joined back up</text>
+      <text class="t" x="358" y="118"><tspan font-weight="700">Same text at the top of every page</tspan> → running title, skipped</text>
+      <text class="t" x="358" y="144"><tspan font-weight="700">A lone number at the edge</tspan> → page number, skipped</text>
+      <text class="t" x="358" y="170"><tspan font-weight="700">Paragraph unfinished at the page end</tspan> → joined to the next page</text>
+    </svg>
+    <figcaption>A PDF stores positioned fragments, not paragraphs. <code>src/pdf/layout.ts</code> rebuilds them. Once that is done, the same reader used for web pages takes over.</figcaption>
+  </figure>
+  <ul>
+    <li><strong>PDFs</strong> open in Lector's own view. Pages are drawn by PDF.js with an invisible copy of the text on top, so the highlighter has something to mark.</li>
+    <li><strong>Google Docs</strong> draws its text on a canvas, so there is nothing in the page to read or highlight. Lector downloads the document's own export as you, strips it to plain structure, and shows it as a clean page. <code>src/document/index.ts</code></li>
+  </ul>
+
+  <h2>Where to look in the code</h2>
+  <table>
+    <tr><th>If you want to change…</th><th>Open</th></tr>
+    <tr><td>What counts as article text, or what gets skipped</td><td><code>src/content/blocks.ts</code></td></tr>
+    <tr><td>Where sentences are cut</td><td><code>src/content/segment.ts</code></td></tr>
+    <tr><td>How the player looks</td><td><code>src/content/ui/styles.ts</code>, <code>src/content/ui/player.ts</code></td></tr>
+    <tr><td>How playback, seeking and buffering behave</td><td><code>src/offscreen/index.ts</code></td></tr>
+    <tr><td>The voice model and word timings</td><td><code>src/offscreen/engine.ts</code>, <code>src/offscreen/align.ts</code></td></tr>
+    <tr><td>Which voices are offered</td><td><code>src/shared/voices.ts</code> and the list in <code>scripts/build.mjs</code></td></tr>
+    <tr><td>Auto-scroll feel</td><td><code>src/content/scroller.ts</code></td></tr>
+    <tr><td>Shortcuts and the context menu</td><td><code>static/manifest.json</code>, <code>src/background/index.ts</code></td></tr>
+  </table>
+
+  <h2>Try this</h2>
+  <div class="try"><strong>See the word timings.</strong> Run <code>node scripts/voice-check.mjs</code>. It speaks four sentences with the real engine, transcribes the audio back with a speech recogniser, and prints how fast synthesis ran.</div>
+  <div class="try"><strong>Break the alignment on purpose.</strong> In <code>src/offscreen/align.ts</code>, make the easy case always run (skip the edit-distance step). Read a sentence with a year in it and watch the highlight drift after the number.</div>
+  <div class="try"><strong>Move the reading line.</strong> In <code>src/content/scroller.ts</code>, change <code>TARGET</code> from 0.32 to 0.5 and feel how different the scrolling is when the sentence sits mid-screen.</div>
+  <div class="try"><strong>Test it on a hard page.</strong> Run <code>node scripts/try.mjs &lt;url&gt;</code> on a site you read. It prints the sentences Lector chose, so you can see at once if it picked up a menu or missed a paragraph.</div>
+
+  <h2>How it was checked</h2>
+  <ul>
+    <li><code>npm test</code> loads the built extension in Chromium and drives it: reading, word order, pause, speed, voice change, paragraph and selection buttons, resume, settings, the PDF view and the document view.</li>
+    <li><code>scripts/voice-check.mjs</code> confirms the speech is intelligible and measures speed (about 4× faster than real time on WebGPU).</li>
+    <li>Not checked by a machine: how the voice sounds to a person, real Google Docs and Gmail (both need a signed-in account), and local <code>file://</code> PDFs.</li>
+  </ul>
+</main>
+</body>
+</html>
