@@ -75,8 +75,10 @@ function splitLong(text: string, start: number, end: number, out: Array<[number,
 }
 
 /** Character ranges to leave unspoken. */
-function skippedRanges(text: string, options: SpeakOptions): Array<[number, number]> {
+function skippedRanges(text: string, options: SpeakOptions, heading: boolean): Array<[number, number]> {
   const patterns: RegExp[] = [];
+  // The "link to this section" mark that many sites hang on the end of a heading.
+  if (heading) patterns.push(/\s*[#¶§🔗]+\s*$/gu);
   if (options.skipCitations) patterns.push(/\[\s*(?:\d{1,3}|[a-z]|citation needed|note \d+)(?:\s*[,–-]\s*\d{1,3})*\s*\]/gi);
   if (options.skipUrls) patterns.push(/\b(?:https?:\/\/|www\.)[^\s<>"”)]+/gi);
   if (options.skipBrackets) patterns.push(/\[[^\]]{0,200}\]/g);
@@ -119,7 +121,7 @@ export function segment(blocks: Block[], options: SpeakOptions, lang = '', clips
   const units: Unit[] = [];
   blocks.forEach((block, blockIndex) => {
     const [from, to] = clips?.[blockIndex] ?? [0, block.text.length];
-    const skips = skippedRanges(block.text, options);
+    const skips = skippedRanges(block.text, options, block.heading);
 
     const pieces: Array<[number, number]> = [];
     let start = 0;

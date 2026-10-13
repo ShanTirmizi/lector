@@ -1,6 +1,6 @@
 // Shows what Lector would read on a page, without the voice. Fast, so it is
 // the quickest way to see whether a site is being understood.
-// Usage: node scripts/extract.mjs <url> [url ...]
+// Usage: node scripts/extract.mjs <url> [url ...]   (add --all to print every sentence)
 //        node scripts/extract.mjs --test      (checks the pages in test/fixtures/structures)
 import { build } from 'esbuild';
 import { chromium } from 'playwright-core';
@@ -58,15 +58,19 @@ if (process.argv.includes('--test')) {
     failures += problems.length ? 1 : 0;
   }
 } else {
-  for (const url of process.argv.slice(2)) {
+  const everything = process.argv.includes('--all');
+  for (const url of process.argv.slice(2).filter((arg) => !arg.startsWith('--'))) {
     try {
       const { ms, blocks, units } = await read(url);
       const characters = units.reduce((sum, unit) => sum + unit.length, 0);
       console.log(`\n${url}\n${blocks.length} paragraphs, ${units.length} sentences, about ${Math.round(characters / 15.5 / 60)} min, found in ${ms} ms`);
       const show = (unit) => console.log(`   ${unit.slice(0, 110)}`);
-      units.slice(0, 6).forEach(show);
-      if (units.length > 9) console.log('   …');
-      units.slice(Math.max(6, units.length - 3)).forEach(show);
+      if (everything) units.forEach(show);
+      else {
+        units.slice(0, 6).forEach(show);
+        if (units.length > 9) console.log('   …');
+        units.slice(Math.max(6, units.length - 3)).forEach(show);
+      }
     } catch (error) {
       console.log(`\n${url}\nFAILED: ${String(error.message).split('\n')[0]}`);
     }

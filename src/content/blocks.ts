@@ -32,7 +32,7 @@ const SKIPPED_TAGS = new Set([
 ]);
 const SKIPPED_ROLES = new Set([
   'navigation', 'banner', 'contentinfo', 'complementary', 'search', 'menu', 'menubar', 'toolbar', 'tablist',
-  'dialog', 'alert', 'status', 'button', 'img',
+  'dialog', 'alertdialog', 'alert', 'status', 'button', 'img',
 ]);
 const INLINE_TAGS = new Set([
   'A', 'SPAN', 'EM', 'STRONG', 'B', 'I', 'U', 'S', 'CODE', 'SMALL', 'SUB', 'SUP', 'MARK', 'ABBR', 'CITE', 'Q',
@@ -40,7 +40,7 @@ const INLINE_TAGS = new Set([
 ]);
 const BLOCK_SELECTOR = 'p,div,li,ul,ol,dl,dt,dd,h1,h2,h3,h4,h5,h6,blockquote,table,tr,td,th,section,article,pre,figure,figcaption,header,main,hr,details,summary';
 // Class and id fragments that mark page furniture rather than content.
-const FURNITURE = /(^|[-_ ])(comments?|share|sharing|social|related|recirc\w*|promo\w*|advert\w*|ads?|sponsor\w*|newsletter|subscribe|paywall|cookie|consent|breadcrumbs?|sidebar|toolbar|menu|pagination|pager|popup|modal|outbrain|taboola|toc|navbox|mw-editsection|editsection|mw-jump-link|noprint|hatnote|ambox|baseline-indicator|mbox|metadata|reflist|references|footnotes|infobox|catlinks|visually-hidden|sr-only|screen-reader-text)([-_ ]|$)/i;
+const FURNITURE = /(^|[-_ ])(comments?|share|sharing|social|related|recirc\w*|promo\w*|advert\w*|ads?|sponsor\w*|newsletter|subscribe|paywall|cookie|consent|onetrust|didomi|gdpr|usa-banner|breadcrumbs?|sidebar|toolbar|menu|pagination|pager|popup|modal|outbrain|taboola|toc|navbox|mw-editsection|editsection|mw-jump-link|noprint|hatnote|ambox|baseline-indicator|mbox|metadata|reflist|references|footnotes|infobox|catlinks|visually-hidden|sr-only|screen-reader-text)([-_ ]|$)/i;
 const CAPTION = /(^|[-_ ])(caption|thumbcaption|gallerytext|wp-caption-text|credit)([-_ ]|$)/i;
 // Bylines and datelines: worth a glance on the page, tiresome to hear.
 const METADATA = /(^|[-_ ])(byline|bylines|author|authors|dateline|date|datetime|timestamp|published|updated|posted|posted-on|post-meta|entry-meta|article-meta|meta|reading-time|read-time)([-_ ]|$)/i;
@@ -100,7 +100,7 @@ class Extractor {
     }
     if (SKIPPED_TAGS.has(el.tagName.toUpperCase())) return true;
     const role = el.getAttribute('role');
-    if (role && SKIPPED_ROLES.has(role)) return true;
+    if ((role && SKIPPED_ROLES.has(role)) || el.getAttribute('aria-modal') === 'true') return true;
     if (this.options.skipCaptions && (el.tagName === 'FIGCAPTION' || el.tagName === 'CAPTION')) return true;
     if (this.options.skipCode && el.tagName === 'PRE') return true;
     if (this.options.skipCitations && isCitationMarker(el)) return true;
@@ -373,7 +373,7 @@ export function findMainContent(doc: Document = document): Element {
 }
 
 // Short lines that are page furniture wherever they appear.
-const BOILERPLATE = /^(read more|continue reading|advertisement|sponsored( content)?|share( this( article| story| post| page)?)?|related( articles| stories| posts| content| reading)?|recommended( for you)?|most (read|popular)|sign up|subscribe|newsletter|listen to this (post|article|story|episode):?|table of contents|contents|on this page|skip to (main )?content|loading[.…]*|comments?|leave a (comment|reply)|tags?:?|follow us.*|previous|next|back to top|print|save|copy link)$/i;
+const BOILERPLATE = /^(read more|continue reading|advertisement|sponsored( content)?|share( this( article| story| post| page)?)?|related( articles| stories| posts| content| reading)?|recommended( for you)?|you (might|may) also like|featured video|more from .{1,30}|trending( now)?|popular|latest|most (read|popular|viewed|shared)|sign up|subscribe|newsletter|listen to this (post|article|story|episode):?|table of contents|contents|on this page|skip to (main )?content|loading[.…]*|comments?|leave a (comment|reply)|tags?:?|follow us.*|previous|next|back to top|print|save|copy link)$/i;
 
 const sameText = (text: string) => text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 const headingOf = (block: Block) => block.nodes[0]?.parentElement?.closest('h1,h2,h3,h4,h5,h6,[role="heading"]') ?? null;
@@ -392,6 +392,8 @@ export function extractBlocks(root: Element, options: ExtractOptions): Block[] {
   }
 
   blocks = blocks.filter((block) => block.text.length >= 40 || !BOILERPLATE.test(block.text.trim()));
+  // A bare number on its own line is a counter or a score, not part of the text.
+  blocks = blocks.filter((block) => block.heading || block.text.length > 6 || !/^[\d\s.,:%+\-–]+$/.test(block.text) || block.el.closest('td, th') !== null);
   blocks = dropLinkLists(options.skipCitations ? dropReferenceSections(blocks) : blocks);
   return dropEmptySections(blocks);
 }
@@ -471,10 +473,30 @@ function dropReferenceSections(blocks: Block[]): Block[] {
   return after < before * 0.3 ? blocks : kept;
 }
 
+/**
+ * A heading that is one link to another page is a teaser for a different
+ * story. A heading that links to itself (a section anchor) is still a heading.
+ */
+function isTeaser(block: Block): boolean {
+  const heading = headingOf(block) ?? block.el;
+  const link = heading.closest('a') ?? heading.querySelector('a');
+  if (!link) return false;
+  const href = link.getAttribute('href') ?? '';
+  if (href === '' || href.startsWith('#')) return false;
+  try {
+    const target = new URL(href, location.href);
+    if (target.origin + target.pathname === location.origin + location.pathname) return false;
+  } catch {
+    return false;
+  }
+  return visibleTextLength(link) >= block.text.length * 0.9;
+}
+
 /** Removes runs of blocks that are nothing but links: menus, tag clouds, "read next" lists. */
 function dropLinkLists(blocks: Block[]): Block[] {
-  return blocks.filter((block) => {
-    if (block.heading || block.text.length > 200) return true;
+  return blocks.filter((block, i) => {
+    if (block.text.length > 200) return true;
+    if (block.heading) return i === 0 || !isTeaser(block);
     const el = block.el;
     // Text that is itself one link (a "next page" card, a tag) is navigation, not prose.
     if (el.closest('a')) return /[.!?]["”’)]?$/.test(block.text) && block.text.length > 60;
