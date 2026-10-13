@@ -49,6 +49,8 @@ export class Reader {
   /** True when the engine no longer holds our text and must be given it again before playing. */
   private detached = true;
   private listeners = new Set<(snapshot: Snapshot) => void>();
+  /** Characters spoken before each unit, plus the total at the end; progress is measured in text, not sentences. */
+  private offsets = new Float64Array(1);
 
   constructor(
     private settings: Settings,
@@ -84,7 +86,7 @@ export class Reader {
       state: this.state,
       index: this.index,
       total,
-      progress: total > 0 ? Math.min(1, (this.index + (this.state === 'ended' ? 1 : 0)) / total) : 0,
+      progress: total > 0 ? (this.state === 'ended' ? 1 : this.offsets[this.index] / Math.max(1, this.offsets[total])) : 0,
       remaining: this.state === 'ended' ? 0 : estimateSeconds(units, this.index) / this.settings.rate,
       notice,
       download: this.state === 'loading' && this.modelPhase === 'download' ? this.download : null,
@@ -116,6 +118,8 @@ export class Reader {
   start(reading: Reading, index = 0): void {
     this.reading = reading;
     this.index = Math.max(0, Math.min(index, reading.units.length - 1));
+    this.offsets = new Float64Array(reading.units.length + 1);
+    reading.units.forEach((unit, i) => (this.offsets[i + 1] = this.offsets[i] + unit.spoken.length));
     this.scroller.setActive(true);
     this.load(true);
   }
@@ -190,6 +194,26 @@ export class Reader {
 
   next(): void {
     this.seek(this.index + 1);
+  }
+
+  /** The unit at a point 0–1 through the text, with what would be left to hear from there. */
+  peek(fraction: number): { index: number; text: string; remaining: number } | null {
+    const units = this.reading?.units;
+    if (!units?.length) return null;
+    const target = Math.min(1, Math.max(0, fraction)) * this.offsets[units.length];
+    let low = 0;
+    let high = units.length - 1;
+    while (low < high) {
+      const mid = (low + high + 1) >> 1;
+      if (this.offsets[mid] <= target) low = mid;
+      else high = mid - 1;
+    }
+    return { index: low, text: units[low].spoken, remaining: estimateSeconds(units, low) / this.settings.rate };
+  }
+
+  seekFraction(fraction: number): void {
+    const place = this.peek(fraction);
+    if (place) this.seek(place.index);
   }
 
   previous(): void {

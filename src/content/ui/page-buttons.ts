@@ -4,6 +4,7 @@
 
 import { formatDuration, h } from './dom';
 import { icons } from './icons';
+import { keys } from './tips';
 
 export class Launcher {
   private el: HTMLButtonElement;
@@ -11,7 +12,7 @@ export class Launcher {
   private time = h('small');
 
   constructor(root: ShadowRoot, onClick: () => void) {
-    this.el = h('button', { class: 'launcher', type: 'button', hidden: true, title: 'Read this page aloud (Alt+R)', onClick }, h('span', { class: 'dot', html: icons.play }), this.label, this.time);
+    this.el = h('button', { class: 'launcher', type: 'button', hidden: true, 'aria-label': 'Read this page aloud', 'data-tip': 'Read this page aloud', 'data-keys': keys('Alt', 'R'), onClick }, h('span', { class: 'dot', html: icons.play }), this.label, this.time);
     this.el.style.top = '42%';
     root.append(this.el);
   }
@@ -35,7 +36,7 @@ export class ParagraphButton {
   private hideTimer = 0;
 
   constructor(root: ShadowRoot, onClick: (blockIndex: number) => void) {
-    this.el = h('button', { class: 'spot', type: 'button', 'aria-label': 'Read from this paragraph', title: 'Read from here', html: icons.play, onClick: () => this.target >= 0 && onClick(this.target) });
+    this.el = h('button', { class: 'spot', type: 'button', 'aria-label': 'Read from this paragraph', 'data-tip': 'Read from here', html: icons.play, onClick: () => this.target >= 0 && onClick(this.target) });
     this.el.addEventListener('pointerenter', () => clearTimeout(this.hideTimer));
     this.el.addEventListener('pointerleave', () => this.hideSoon());
     root.append(this.el);
@@ -108,7 +109,7 @@ export class Toast {
   constructor(private root: ShadowRoot) {}
 
   /** @param action  an optional button shown after the message */
-  show(message: string, action?: { label: string; run: () => void }): void {
+  show(message: string, action?: { label: string; run: () => void }, duration?: number): void {
     this.el?.remove();
     clearTimeout(this.timer);
     const el = h('div', { class: 'toast', role: 'status' }, h('span', {}, message));
@@ -119,6 +120,6 @@ export class Toast {
     }
     this.el = el;
     this.root.append(el);
-    this.timer = window.setTimeout(() => el.remove(), action ? 7000 : 4200);
+    this.timer = window.setTimeout(() => el.remove(), duration ?? (action ? 7000 : 4200));
   }
 }

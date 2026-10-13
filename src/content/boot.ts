@@ -11,6 +11,7 @@ import { estimateSeconds } from './segment';
 import { Launcher, ParagraphButton, SelectionButton, Toast } from './ui/page-buttons';
 import { Player } from './ui/player';
 import { styles } from './ui/styles';
+import { Tips } from './ui/tips';
 
 const MIN_ARTICLE_CHARACTERS = 900;
 
@@ -191,6 +192,8 @@ export async function boot(options: BootOptions = {}): Promise<Booted | null> {
       previewVoice: (voice) => reader.previewVoice(voice),
       change,
       backToText: () => reader.resumeScroll(),
+      peek: (fraction) => reader.peek(fraction),
+      seekTo: (fraction) => reader.seekFraction(fraction),
       openSettings: () => void chrome.runtime.sendMessage({ type: 'open-options' } satisfies ToBackground),
       hideOnThisSite: () => {
         change({ disabledSites: [...new Set([...settings.disabledSites, location.hostname])] });
@@ -200,6 +203,7 @@ export async function boot(options: BootOptions = {}): Promise<Booted | null> {
     settings,
   );
 
+  new Tips(root);
   const launcher = new Launcher(root, () => startPage());
   const paragraphButton = new ParagraphButton(root, (blockIndex) => startPage(blockIndex));
   const selectionButton = new SelectionButton(root, () => startSelection());
@@ -214,7 +218,12 @@ export async function boot(options: BootOptions = {}): Promise<Booted | null> {
   }
 
   let lastPlace = -1;
+  let explainedDownload = false;
   reader.subscribe((snapshot) => {
+    if (snapshot.download !== null && !explainedDownload) {
+      explainedDownload = true;
+      toast.show('Getting the voice. This is a one-time download of about 330 MB. After it, Lector starts in a moment and works offline.', undefined, 12000);
+    }
     if (snapshot.active) {
       mount();
       launcher.hide();

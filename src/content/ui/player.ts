@@ -5,6 +5,7 @@ import { VOICES, voiceById } from '../../shared/voices';
 import type { Snapshot } from '../reader';
 import { formatRate, formatRemaining, h } from './dom';
 import { icons } from './icons';
+import { keys, place } from './tips';
 
 export interface PlayerActions {
   toggle(): void;
@@ -16,6 +17,9 @@ export interface PlayerActions {
   previewVoice(voice: string): void;
   change(patch: Partial<Settings>): void;
   backToText(): void;
+  /** What sits at a point 0–1 through the text, for the preview shown while scrubbing. */
+  peek(fraction: number): { text: string; remaining: number } | null;
+  seekTo(fraction: number): void;
   openSettings(): void;
   hideOnThisSite(): void;
 }
@@ -41,6 +45,8 @@ export class Player {
   private voiceName: HTMLElement;
   private moreButton: HTMLButtonElement;
   private status: HTMLElement;
+  private scrub: HTMLElement;
+  private peekBubble = h('div', { class: 'peek', hidden: true });
   private panel: HTMLElement | null = null;
   private openPanel: PanelName | null = null;
   private lastIcon = '';
@@ -51,18 +57,29 @@ export class Player {
     private actions: PlayerActions,
     private settings: Settings,
   ) {
-    const button = (cls: string, label: string, icon: string, onClick: () => void) =>
-      h('button', { class: cls, type: 'button', 'aria-label': label, title: label, html: icon, onClick });
+    const button = (cls: string, label: string, icon: string, onClick: () => void, shortcut?: string) =>
+      h('button', { class: cls, type: 'button', 'aria-label': label, 'data-tip': label, 'data-keys': shortcut, html: icon, onClick });
 
-    this.previousButton = button('icon', 'Previous sentence', icons.previous, () => actions.previous());
-    this.playButton = h('button', { class: 'play', type: 'button', onClick: () => actions.toggle() });
-    this.nextButton = button('icon', 'Next sentence', icons.next, () => actions.next());
-    this.speedChip = h('button', { class: 'chip speed', type: 'button', 'aria-haspopup': 'dialog', title: 'Speed', onClick: () => this.togglePanel('speed') });
+    this.previousButton = button('icon', 'Previous sentence', icons.previous, () => actions.previous(), keys('Alt', ','));
+    this.playButton = h('button', { class: 'play', type: 'button', 'data-keys': keys('Alt', 'R'), onClick: () => actions.toggle() });
+    this.nextButton = button('icon', 'Next sentence', icons.next, () => actions.next(), keys('Alt', '.'));
+    this.speedChip = h('button', { class: 'chip speed', type: 'button', 'aria-haspopup': 'dialog', 'aria-label': 'Speed', 'data-tip': 'Speed', onClick: () => this.togglePanel('speed') });
     this.voiceName = h('span');
-    this.voiceChip = h('button', { class: 'chip voice', type: 'button', 'aria-haspopup': 'dialog', title: 'Voice', onClick: () => this.togglePanel('voice') }, this.voiceName);
+    this.voiceChip = h(
+      'button',
+      { class: 'chip voice', type: 'button', 'aria-haspopup': 'dialog', 'aria-label': 'Voice', 'data-tip': 'Voice', onClick: () => this.togglePanel('voice') },
+      h('i', { class: 'eq', html: '<b></b><b></b><b></b>' }),
+      this.voiceName,
+    );
     this.status = h('div', { class: 'status', role: 'status' });
     this.moreButton = button('icon quiet', 'Reading options', icons.more, () => this.togglePanel('more'));
-    const grip = h('div', { class: 'grip', title: 'Drag to move' });
+    const grip = h('div', { class: 'grip', 'data-tip': 'Drag to move' });
+    this.scrub = h(
+      'div',
+      { class: 'scrub', role: 'slider', tabindex: 0, 'aria-label': 'Position in the text', 'aria-valuemin': 0, 'aria-valuemax': 100 },
+      h('div', { class: 'track' }, h('i')),
+      h('b', { class: 'thumb' }),
+    );
 
     this.el = h(
       'div',
@@ -78,10 +95,11 @@ export class Player {
       h('div', { class: 'rule' }),
       this.moreButton,
       button('icon quiet', 'Close the player', icons.close, () => actions.close()),
-      h('div', { class: 'progress' }, h('i')),
+      this.scrub,
     );
-    root.append(this.el);
+    root.append(this.el, this.peekBubble);
 
+    this.enableScrubbing();
     this.enableDragging();
     window.addEventListener('resize', () => this.visible && this.place());
     // Clicks elsewhere on the page close an open panel. Events from inside the
@@ -143,7 +161,8 @@ export class Player {
     }
     const label = snapshot.state === 'ended' ? 'Read again' : playing ? 'Pause' : 'Play';
     this.playButton.setAttribute('aria-label', label);
-    this.playButton.title = `${label} (Alt+R)`;
+    this.playButton.setAttribute('data-tip', label);
+    this.el.toggleAttribute('data-speaking', snapshot.state === 'playing');
 
     if (snapshot.download !== null) {
       this.el.dataset.busy = 'fill';
@@ -151,7 +170,8 @@ export class Player {
     } else if (waiting) this.el.dataset.busy = 'spin';
     else delete this.el.dataset.busy;
 
-    this.el.style.setProperty('--progress', String(snapshot.progress));
+    if (!this.scrubbing) this.el.style.setProperty('--progress', String(snapshot.progress));
+    this.scrub.setAttribute('aria-valuenow', String(Math.round(snapshot.progress * 100)));
     this.previousButton.disabled = snapshot.total === 0;
     this.nextButton.disabled = snapshot.index >= snapshot.total - 1;
 
@@ -173,8 +193,8 @@ export class Player {
 
   /** Puts the player where it was last dropped, or bottom centre, always fully on screen. */
   private place(): void {
-    const narrow = window.innerWidth < 620;
-    this.el.classList.toggle('narrow', narrow);
+    this.el.classList.toggle('narrow', window.innerWidth < 620);
+    this.el.classList.toggle('tiny', window.innerWidth < 380);
     const { width, height } = this.el.getBoundingClientRect();
     const position = this.settings.playerPosition;
     const maxLeft = Math.max(EDGE, window.innerWidth - width - EDGE);
@@ -190,7 +210,7 @@ export class Player {
     let start: { x: number; y: number; left: number; top: number } | null = null;
     let moved = false;
     this.el.addEventListener('pointerdown', (event) => {
-      if (event.button !== 0 || (event.target as Element).closest('button, input')) return;
+      if (event.button !== 0 || (event.target as Element).closest('button, input, .scrub')) return;
       const rect = this.el.getBoundingClientRect();
       start = { x: event.clientX, y: event.clientY, left: rect.left, top: rect.top };
       moved = false;
@@ -229,6 +249,56 @@ export class Player {
     this.el.addEventListener('dblclick', (event) => {
       if ((event.target as Element).closest('button, input')) return;
       this.actions.change({ playerPosition: null });
+    });
+  }
+
+  // --------------------------------------------------------------- scrubbing
+
+  private scrubbing = false;
+
+  /** Hovering the progress line previews the text at that point; clicking or dragging jumps there. */
+  private enableScrubbing(): void {
+    const fractionAt = (event: PointerEvent) => {
+      const rect = this.scrub.getBoundingClientRect();
+      return Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
+    };
+    const preview = (event: PointerEvent) => {
+      const fraction = fractionAt(event);
+      const place_ = this.actions.peek(fraction);
+      if (!place_) return;
+      const text = place_.text.length > 84 ? `${place_.text.slice(0, 82).trimEnd()}…` : place_.text;
+      this.peekBubble.replaceChildren(h('span', {}, text), h('small', {}, formatRemaining(place_.remaining)));
+      this.peekBubble.hidden = false;
+      const rect = this.scrub.getBoundingClientRect();
+      const bar = this.el.getBoundingClientRect();
+      place(this.peekBubble, { left: rect.left + rect.width * fraction, width: 0, top: bar.top, bottom: bar.bottom });
+      this.scrub.style.setProperty('--at', String(fraction));
+      if (this.scrubbing) this.el.style.setProperty('--progress', String(fraction));
+    };
+    this.scrub.addEventListener('pointermove', preview);
+    this.scrub.addEventListener('pointerleave', () => {
+      if (!this.scrubbing) this.peekBubble.hidden = true;
+    });
+    this.scrub.addEventListener('pointerdown', (event) => {
+      if (event.button !== 0) return;
+      this.scrubbing = true;
+      this.scrub.setPointerCapture(event.pointerId);
+      this.closePanel();
+      preview(event);
+    });
+    const finish = (event: PointerEvent, commit: boolean) => {
+      if (!this.scrubbing) return;
+      this.scrubbing = false;
+      this.peekBubble.hidden = true;
+      if (commit) this.actions.seekTo(fractionAt(event));
+    };
+    this.scrub.addEventListener('pointerup', (event) => finish(event, true));
+    this.scrub.addEventListener('pointercancel', (event) => finish(event, false));
+    this.scrub.addEventListener('keydown', (event) => {
+      if (event.key === 'ArrowRight') this.actions.next();
+      else if (event.key === 'ArrowLeft') this.actions.previous();
+      else return;
+      event.preventDefault();
     });
   }
 
@@ -319,8 +389,8 @@ export class Player {
           h(
             'div',
             { class: 'voice-row', 'aria-current': String(voice.id === this.settings.voice) },
-            h('button', { class: 'pick', type: 'button', html: `<b>${voice.name}</b><span>${voice.gender.toLowerCase()}</span>${icons.check}`, onClick: () => this.actions.setVoice(voice.id) }),
-            h('button', { class: 'try', type: 'button', 'aria-label': `Hear ${voice.name}`, title: `Hear ${voice.name}`, html: icons.sample, onClick: () => this.actions.previewVoice(voice.id) }),
+            h('button', { class: 'pick', type: 'button', html: `<i class="face" style="--hue:${hue(voice.id)}">${voice.name[0]}</i><b>${voice.name}</b><span>${voice.gender.toLowerCase()}</span>${icons.check}`, onClick: () => this.actions.setVoice(voice.id) }),
+            h('button', { class: 'try', type: 'button', 'aria-label': `Hear ${voice.name}`, 'data-tip': `Hear ${voice.name}`, html: icons.sample, onClick: () => this.actions.previewVoice(voice.id) }),
           ),
         );
       }
@@ -346,7 +416,7 @@ export class Player {
           'div',
           {},
           ...SWATCHES.map(([id, color, name]) =>
-            h('button', { type: 'button', style: `--swatch:${color}`, 'aria-label': name, title: name, 'aria-pressed': String(s.highlightColor === id), onClick: () => this.actions.change({ highlightColor: id }) }),
+            h('button', { type: 'button', style: `--swatch:${color}`, 'aria-label': name, 'data-tip': name, 'aria-pressed': String(s.highlightColor === id), onClick: () => this.actions.change({ highlightColor: id }) }),
           ),
         ),
       ),
@@ -372,4 +442,11 @@ export class Player {
     }
     this.panel.querySelectorAll('.presets button').forEach((button, i) => button.setAttribute('aria-pressed', String(Math.abs(PRESETS[i] - rate) < 0.001)));
   }
+}
+
+/** A stable colour for a voice, so each has its own face in the list. */
+function hue(id: string): number {
+  let sum = 0;
+  for (const ch of id) sum = (sum * 31 + ch.charCodeAt(0)) % 360;
+  return sum;
 }

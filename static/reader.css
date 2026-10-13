@@ -105,3 +105,36 @@ article a { color: inherit; text-underline-offset: 3px; }
 article table { border-collapse: collapse; margin: 1em 0; font-size: 16px; }
 article td, article th { border: 1px solid var(--rule); padding: 6px 10px; vertical-align: top; }
 article blockquote { margin: 1em 0; padding-left: 18px; border-left: 3px solid var(--rule); }
+
+/* ----- Welcome page. */
+.welcome .hello { margin-bottom: 44px; }
+.welcome .hello img { border-radius: 14px; margin-bottom: 20px; }
+.welcome h1 { font-size: 44px; line-height: 1.08; margin-bottom: 18px; }
+.welcome h1 mark { background: #ffd84d; color: #17130a; padding: 0 6px; border-radius: 8px; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+.welcome .lead { font-size: 21px; }
+.welcome .small { font-family: ui-rounded, "SF Pro Rounded", "Segoe UI", system-ui, sans-serif; font-size: 15px; color: var(--sage); }
+.welcome #start {
+  height: 48px;
+  padding: 0 22px;
+  border: 0;
+  border-radius: 24px;
+  background: var(--green);
+  color: #ffd84d;
+  font: 600 17px ui-rounded, "SF Pro Rounded", "Segoe UI", system-ui, sans-serif;
+  cursor: pointer;
+}
+.welcome #start:hover { background: #20503f; }
+.welcome #start:focus-visible { outline: 2px solid var(--green); outline-offset: 3px; }
+.welcome li { margin-bottom: 0.5em; }
+.welcome kbd {
+  display: inline-block;
+  min-width: 26px;
+  padding: 0 7px;
+  border: 1px solid var(--rule);
+  border-bottom-width: 2px;
+  border-radius: 7px;
+  background: #fff;
+  font: 600 14px/1.6 ui-rounded, "SF Pro Rounded", "Segoe UI", system-ui, sans-serif;
+  text-align: center;
+  vertical-align: 2px;
+}

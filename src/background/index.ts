@@ -84,7 +84,8 @@ chrome.commands.onCommand.addListener(async (command) => {
   if (command === 'stop-reading') await sendToTab(tabId, { type: 'stop' });
 });
 
-chrome.runtime.onInstalled.addListener(() => {
+chrome.runtime.onInstalled.addListener((details) => {
+  if (details.reason === chrome.runtime.OnInstalledReason.INSTALL) void chrome.tabs.create({ url: 'welcome.html' });
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({ id: 'read-selection', title: 'Read selection aloud', contexts: ['selection'] });
     chrome.contextMenus.create({ id: 'read-from-here', title: 'Read aloud from here', contexts: ['page', 'link', 'image'] });

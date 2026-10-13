@@ -57,7 +57,7 @@ svg { display: block; }
   background: var(--green);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 29px;
-  box-shadow: 0 14px 34px rgba(9, 28, 23, 0.34), 0 2px 6px rgba(9, 28, 23, 0.22);
+  box-shadow: 0 14px 34px rgba(9, 28, 23, 0.34), 0 2px 6px rgba(9, 28, 23, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.07);
   user-select: none;
   touch-action: none;
   white-space: nowrap;
@@ -151,14 +151,14 @@ svg { display: block; }
 }
 .chip:hover, .chip[aria-expanded="true"] { background: rgba(255, 255, 255, 0.1); }
 .chip.speed { min-width: 52px; text-align: center; }
-.chip.voice { display: flex; align-items: center; gap: 7px; }
-.chip.voice::before {
-  content: "";
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--marker);
-}
+.chip.voice { display: flex; align-items: center; gap: 8px; }
+/* Three bars that move while the voice is speaking. */
+.eq { display: flex; align-items: center; gap: 2px; width: 12px; height: 14px; }
+.eq b { width: 2.6px; height: 4px; border-radius: 2px; background: var(--marker); transition: height 200ms; }
+.player[data-speaking] .eq b { animation: speak 900ms ease-in-out infinite; }
+.player[data-speaking] .eq b:nth-child(2) { animation-delay: -300ms; animation-duration: 760ms; }
+.player[data-speaking] .eq b:nth-child(3) { animation-delay: -560ms; animation-duration: 1040ms; }
+@keyframes speak { 0%, 100% { height: 4px; } 50% { height: 13px; } }
 
 .status {
   /* A fixed width, so the buttons do not shift under the pointer when the text changes. */
@@ -188,36 +188,93 @@ svg { display: block; }
 
 .rule { width: 1px; height: 22px; margin: 0 5px; background: rgba(255, 255, 255, 0.14); }
 
-/* Progress drawn like a stroke of highlighter along the bottom edge. */
-.progress {
+/* Progress drawn like a stroke of highlighter along the bottom edge. It is also a scrubber. */
+.scrub {
   position: absolute;
-  left: 26px;
-  right: 26px;
+  left: 24px;
+  right: 24px;
+  bottom: 0;
+  height: 15px;
+  cursor: pointer;
+  touch-action: none;
+  border-radius: 8px;
+}
+.scrub .track {
+  position: absolute;
+  left: 0;
+  right: 0;
   bottom: 6px;
   height: 3px;
-  border-radius: 2px;
+  border-radius: 3px;
   background: rgba(255, 255, 255, 0.13);
   overflow: hidden;
-  pointer-events: none;
+  transition: height 120ms, bottom 120ms;
 }
-.progress i {
+.scrub .track i {
   display: block;
   height: 100%;
   width: calc(var(--progress, 0) * 100%);
-  border-radius: 2px;
+  border-radius: 3px;
   background: var(--marker);
   transition: width 400ms ease-out;
 }
+.scrub .thumb {
+  position: absolute;
+  bottom: 2px;
+  left: calc(var(--at, 0) * 100%);
+  width: 3px;
+  height: 11px;
+  margin-left: -1.5px;
+  border-radius: 2px;
+  background: var(--chalk);
+  opacity: 0;
+  transition: opacity 120ms;
+  pointer-events: none;
+}
+.scrub:hover .track, .scrub:active .track { height: 5px; bottom: 5px; }
+.scrub:hover .thumb, .scrub:active .thumb { opacity: 1; }
+.scrub:active .track i { transition: none; }
 
-.player.narrow .status:not(.problem), .player.narrow .rule, .player.narrow .grip { display: none; }
-.player.narrow .chip.voice span { display: none; }
-.player.narrow .chip.voice { padding: 0 13px; }
+.tip, .peek {
+  position: fixed;
+  z-index: 3;
+  padding: 6px 10px;
+  border-radius: 9px;
+  background: var(--green-deep);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 6px 18px rgba(9, 28, 23, 0.34);
+  font-size: 12.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  pointer-events: none;
+  animation: fade 110ms ease-out;
+}
+@keyframes fade { from { opacity: 0; } }
+.tip kbd {
+  margin-left: 8px;
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.12);
+  font: inherit;
+  font-weight: 600;
+  color: var(--marker);
+}
+.peek { display: grid; gap: 2px; max-width: 320px; padding: 9px 12px; white-space: normal; font-size: 13px; line-height: 1.35; }
+.peek small { color: var(--sage); font-size: 12px; font-variant-numeric: tabular-nums; }
+
+.player.narrow .status:not(.problem), .player.narrow .rule { display: none; }
+.player.narrow { padding-left: 2px; }
+.player.tiny .grip, .player.tiny .chip.voice span { display: none; }
+.player.tiny { padding-left: 6px; }
 
 /* ------------------------------------------------------------------ panels */
 
 .panel {
   position: fixed;
-  width: 264px;
+  z-index: 2;
+  width: 272px;
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
   padding: 14px;
   background: var(--green-deep);
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -264,20 +321,34 @@ input[type="range"]::-webkit-slider-thumb {
   background: rgba(255, 255, 255, 0.07);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-  font-size: 13px;
+  font-size: 12.5px;
+  letter-spacing: -0.01em;
 }
 .presets button:hover { background: rgba(255, 255, 255, 0.14); }
 .presets button[aria-pressed="true"] { background: var(--marker); color: var(--ink); }
 
-.voices { max-height: 300px; margin: 0 -8px -6px; padding: 0 2px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.25) transparent; }
+.voices { -webkit-mask-image: linear-gradient(#000 calc(100% - 22px), transparent); mask-image: linear-gradient(#000 calc(100% - 22px), transparent); padding-bottom: 14px !important; max-height: min(326px, calc(100vh - 150px)); margin: 0 -8px -6px; padding: 0 2px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.25) transparent; }
 .voices h3 { margin: 10px 8px 4px; font-size: 12px; font-weight: 600; color: var(--sage); }
 .voices h3:first-child { margin-top: 0; }
 .voice-row { display: flex; align-items: center; border-radius: 11px; }
 .voice-row:hover { background: rgba(255, 255, 255, 0.07); }
-.voice-row .pick { flex: 1; display: flex; align-items: baseline; gap: 8px; padding: 9px 8px; text-align: left; border-radius: 11px; }
+.voice-row .pick { flex: 1; display: flex; align-items: center; gap: 9px; padding: 6px 8px; text-align: left; border-radius: 11px; }
+.voice-row .face {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: hsl(var(--hue) 46% 78%);
+  color: hsl(var(--hue) 50% 20%);
+  font-style: normal;
+  font-weight: 700;
+  font-size: 13px;
+}
 .voice-row .pick b { font-weight: 600; }
 .voice-row .pick span { color: var(--sage); font-size: 12.5px; }
-.voice-row .pick svg { width: 16px; height: 16px; margin-left: auto; align-self: center; color: var(--marker); visibility: hidden; }
+.voice-row .pick svg { width: 16px; height: 16px; margin-left: auto; color: var(--marker); visibility: hidden; }
 .voice-row[aria-current="true"] .pick svg { visibility: visible; }
 .voice-row .try { display: grid; place-items: center; width: 32px; height: 32px; margin-right: 3px; border-radius: 50%; color: var(--sage); }
 .voice-row .try:hover { background: rgba(255, 255, 255, 0.12); color: var(--chalk); }
@@ -399,5 +470,6 @@ input[type="range"]::-webkit-slider-thumb {
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 1ms !important; transition-duration: 1ms !important; }
   .player[data-busy="spin"] .ring { animation-duration: 2400ms !important; }
+  .player[data-speaking] .eq b { animation: none !important; height: 9px; }
 }
 `;

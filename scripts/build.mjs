@@ -34,6 +34,7 @@ const entries = [
   { entryPoints: { options: 'src/options/index.ts' }, format: 'esm' },
   { entryPoints: { pdf: 'src/pdf/index.ts' }, format: 'esm' },
   { entryPoints: { document: 'src/document/index.ts' }, format: 'esm' },
+  { entryPoints: { welcome: 'src/welcome/index.ts' }, format: 'esm' },
   {
     entryPoints: { 'engine-worker': 'src/offscreen/worker.ts' },
     format: 'esm',

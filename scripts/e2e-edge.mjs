@@ -42,6 +42,24 @@ export async function runEdge({ context, worker, command, check, waitFor, sleep,
   await waitFor(async () => (await a.read('lector-sentence'))?.startsWith('The dome opens'), 15_000, 'Alt+Shift+. to jump a paragraph');
   check('keyboard shortcuts work', true);
 
+  // The progress line: hovering previews the text, clicking jumps there.
+  const line = await a.ui('.scrub').boundingBox();
+  await page.mouse.move(line.x + line.width * 0.9, line.y + line.height - 6);
+  await a.ui('.peek').waitFor({ state: 'visible', timeout: 3_000 });
+  const peeked = await a.ui('.peek span').innerText();
+  await page.mouse.click(line.x + line.width * 0.9, line.y + line.height - 6);
+  await waitFor(async () => (await a.read('lector-sentence'))?.startsWith(peeked.replace(/…$/, '').slice(0, 30)), 15_000, 'jump to the previewed sentence');
+  check('the progress line previews and jumps', true, peeked.slice(0, 50));
+  await page.mouse.move(600, 200);
+  await a.ui('button[aria-label="Previous sentence"]').hover();
+  await a.ui('.tip').waitFor({ state: 'visible', timeout: 3_000 });
+  check('tooltips name the control and its shortcut', /Previous sentence/.test(await a.ui('.tip').innerText()));
+  await page.mouse.move(600, 200);
+  await page.keyboard.press('Alt+Shift+Comma');
+  await page.keyboard.press('Alt+Shift+Comma');
+  await page.keyboard.press('Alt+Shift+Comma');
+  await waitFor(async () => (await a.read('lector-sentence'))?.startsWith('The dome opens') || (await a.read('lector-sentence')) === 'Notes from the observatory', 15_000, 'back to the top');
+
   // Hammering "next" must not confuse it.
   for (let i = 0; i < 6; i++) await a.ui('button[aria-label="Next sentence"]').click({ delay: 20 }).catch(() => {});
   await playing(a);
