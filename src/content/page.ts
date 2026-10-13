@@ -59,8 +59,8 @@ export function readSelection(settings: Settings): Reading | null {
   let container = root as Element;
   while (container.parentElement && getComputedStyle(container).display.startsWith('inline')) container = container.parentElement;
 
-  // A selection is an explicit request: read it even if it is a caption or a code sample.
-  const all = extractBlocks(container, { ...settings, skipCaptions: false, skipCode: false });
+  // A selection is an explicit request: read it even if it is a caption, a code sample or a comment.
+  const all = extractBlocks(container, { ...settings, skipCaptions: false, skipCode: false, explicit: true });
   const blocks: Block[] = [];
   const clips: Array<[number, number]> = [];
   for (const block of all) {

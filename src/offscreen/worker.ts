@@ -97,10 +97,17 @@ async function synth(request: WorkerRequest): Promise<void> {
       speech = await (await getEngine()).speak(request.text, request.voice);
     } catch (error) {
       if (device !== 'webgpu') throw error;
-      // The GPU path can fail at run time on some drivers. Fall back once.
-      console.warn('[lector] WebGPU synthesis failed, switching to WebAssembly', error);
-      engine = start('wasm');
-      speech = await (await engine).speak(request.text, request.voice);
+      // The GPU can be taken away (the laptop slept, the driver reset). Build a
+      // fresh engine on it once; only if that fails too, settle for WebAssembly.
+      console.warn('[lector] WebGPU synthesis failed, restarting the engine', error);
+      try {
+        engine = start('webgpu');
+        speech = await (await engine).speak(request.text, request.voice);
+      } catch (again) {
+        console.warn('[lector] WebGPU is not usable, switching to WebAssembly', again);
+        engine = start('wasm');
+        speech = await (await engine).speak(request.text, request.voice);
+      }
     }
     post({ type: 'result', id: request.id, pcm: speech.pcm, sampleRate: SAMPLE_RATE, words: speech.words }, [speech.pcm.buffer]);
   } catch (error) {

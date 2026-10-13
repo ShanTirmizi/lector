@@ -33,15 +33,37 @@ async function sendToTab(tabId: number | undefined, message: ToContent): Promise
     await chrome.tabs.sendMessage(tabId, message);
     return;
   } catch {
-    // No content script answered: a browser page, a tab opened before install, or one of our own pages.
+    // No content script answered: a browser page, one of our own pages, or a tab
+    // that was already open when Lector was installed or updated.
   }
   const tab = await chrome.tabs.get(tabId).catch(() => undefined);
   const url = tab?.url ?? '';
   if (url.startsWith(chrome.runtime.getURL(''))) {
     // Lector's own PDF and document views listen for broadcasts addressed to their tab.
     await chrome.runtime.sendMessage({ ...message, forTab: tabId }).catch(() => undefined);
-  } else if (message.type === 'toggle' && /\.pdf($|[?#])/i.test(url)) {
+  } else if (message.type === 'toggle' && /\.pdf($|[?#])/i.test(url) && !(await inject(tabId))) {
     await openPdf(url, tab);
+  } else if (await inject(tabId)) {
+    // Give the freshly added script a moment to start listening, then try once more.
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    await chrome.tabs.sendMessage(tabId, message).catch(() => undefined);
+  }
+}
+
+/** Adds the content script to a tab that does not have a working one. False where Chrome forbids it. */
+async function inject(tabId: number): Promise<boolean> {
+  try {
+    await chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'] });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Tabs that were open before an install or update have no content script, or a dead one. */
+async function injectEverywhere(): Promise<void> {
+  for (const tab of await chrome.tabs.query({ url: ['http://*/*', 'https://*/*', 'file:///*'] })) {
+    if (tab.id !== undefined && !tab.discarded) void inject(tab.id);
   }
 }
 
@@ -86,6 +108,7 @@ chrome.commands.onCommand.addListener(async (command) => {
 
 chrome.runtime.onInstalled.addListener((details) => {
   if (details.reason === chrome.runtime.OnInstalledReason.INSTALL) void chrome.tabs.create({ url: 'welcome.html' });
+  void injectEverywhere();
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({ id: 'read-selection', title: 'Read selection aloud', contexts: ['selection'] });
     chrome.contextMenus.create({ id: 'read-from-here', title: 'Read aloud from here', contexts: ['page', 'link', 'image'] });

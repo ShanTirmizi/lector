@@ -39,9 +39,19 @@ async function handOff(open: () => Promise<void>): Promise<void> {
   });
 }
 
+// When Lector is updated, Chrome leaves the old content script running in open
+// tabs, cut off from the extension. A new copy announces itself; older copies
+// hear that and remove themselves.
+const RETIRE = 'lector:retire';
+document.dispatchEvent(new CustomEvent(RETIRE));
+document.querySelectorAll(HOST_TAG).forEach((old) => old.remove());
+
 const googleDoc = location.hostname === 'docs.google.com' ? location.pathname.match(/^\/document\/(?:u\/\d+\/)?d\/([^/]+)/) : null;
 
-if (document.contentType === 'application/pdf') {
+// Chrome shows a PDF as a bare page holding a single embedded viewer.
+const pdfViewer = document.contentType === 'application/pdf' || (document.body?.childElementCount === 1 && document.body.firstElementChild?.matches('embed[type="application/pdf"]'));
+
+if (pdfViewer) {
   void handOff(async () => void (await send({ type: 'open-pdf', url: location.href })));
 } else if (googleDoc) {
   void handOff(async () => {

@@ -45,9 +45,20 @@ export async function boot(options: BootOptions = {}): Promise<Booted | null> {
   const sheet = document.createElement('style');
   sheet.textContent = styles;
   root.append(sheet);
+  /** Set when a newer copy of this script takes over the page (see content/index.ts). */
+  let retired = false;
   const mount = () => {
-    if (!host.isConnected) document.documentElement.append(host);
+    if (!retired && !host.isConnected) document.documentElement.append(host);
   };
+  document.addEventListener(
+    'lector:retire',
+    () => {
+      retired = true;
+      reader.stop();
+      host.remove();
+    },
+    { once: true },
+  );
 
   // Changes apply at once and are written a moment later, so dragging a slider
   // does not flood storage (and every other tab) with updates.
@@ -107,6 +118,9 @@ export async function boot(options: BootOptions = {}): Promise<Booted | null> {
 
   /** Reads the page. With no paragraph given, carries on from where the listener last stopped. */
   function startPage(blockIndex?: number): void {
+    // A fresh look at the page each time reading starts from the top: sections may have been
+    // expanded, or more of the article loaded, since the page was last examined.
+    if (blockIndex === undefined && !reader.isActive) page = null;
     const reading = getPage();
     if (reading.units.length === 0) {
       mount();
@@ -219,10 +233,15 @@ export async function boot(options: BootOptions = {}): Promise<Booted | null> {
 
   let lastPlace = -1;
   let explainedDownload = false;
+  let downloadNote = false;
   reader.subscribe((snapshot) => {
     if (snapshot.download !== null && !explainedDownload) {
       explainedDownload = true;
-      toast.show('Getting the voice. This is a one-time download of about 330 MB. After it, Lector starts in a moment and works offline.', undefined, 12000);
+      downloadNote = true;
+      toast.show('Getting the voice. This is a one-time download of up to 330 MB. After it, Lector starts in a moment and works offline.', undefined, 60000);
+    } else if (downloadNote && snapshot.download === null) {
+      downloadNote = false;
+      toast.hide();
     }
     if (snapshot.active) {
       mount();
@@ -263,7 +282,7 @@ export async function boot(options: BootOptions = {}): Promise<Booted | null> {
   document.addEventListener(
     'mousemove',
     (event) => {
-      if (!settings.paragraphButton || siteHidden()) return;
+      if (retired || !settings.paragraphButton || siteHidden()) return;
       // Events from inside our shadow root arrive retargeted to the host element.
       pointer = { target: event.composedPath()[0] ?? event.target, y: event.clientY, own: event.target === host };
       pointerFrame ||= requestAnimationFrame(() => {
@@ -298,7 +317,7 @@ export async function boot(options: BootOptions = {}): Promise<Booted | null> {
   document.addEventListener('selectionchange', () => {
     clearTimeout(selectionTimer);
     selectionButton.hide();
-    if (!settings.selectionButton || siteHidden()) return;
+    if (retired || !settings.selectionButton || siteHidden()) return;
     selectionTimer = window.setTimeout(() => {
       const selection = window.getSelection();
       if (!selection || selection.isCollapsed || selection.rangeCount === 0) return;
@@ -323,7 +342,7 @@ export async function boot(options: BootOptions = {}): Promise<Booted | null> {
   // address them by tab; it broadcasts instead and names the tab it means.
   const ownTab = location.protocol === 'chrome-extension:' ? (await chrome.tabs.getCurrent())?.id : undefined;
   chrome.runtime.onMessage.addListener((message: ToContent & { forTab?: number }) => {
-    if (message.forTab !== undefined && message.forTab !== ownTab) return;
+    if (retired || (message.forTab !== undefined && message.forTab !== ownTab)) return;
     switch (message.type) {
       case 'toggle':
         if (reader.isActive) reader.toggle();
@@ -350,7 +369,7 @@ export async function boot(options: BootOptions = {}): Promise<Booted | null> {
   window.addEventListener(
     'keydown',
     (event) => {
-      if (!reader.isActive || !event.altKey || event.ctrlKey || event.metaKey) return;
+      if (retired || !reader.isActive || !event.altKey || event.ctrlKey || event.metaKey) return;
       const handled = (() => {
         switch (event.code) {
           case 'Period':
@@ -379,6 +398,7 @@ export async function boot(options: BootOptions = {}): Promise<Booted | null> {
   let refreshDelay = 1500;
   let lastUrl = location.href;
   const refresh = () => {
+    if (retired) return;
     if (location.href !== lastUrl) {
       // A single-page app moved to another article.
       lastUrl = location.href;
@@ -399,7 +419,14 @@ export async function boot(options: BootOptions = {}): Promise<Booted | null> {
     new MutationObserver((records) => {
       if (records.every((record) => record.target === host || host.contains(record.target))) return;
       scheduleRefresh(refreshDelay);
-    }).observe(document.body, { childList: true, subtree: true, characterData: true });
+    }).observe(document.body, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+      // Sections that are opened and closed without adding anything to the page.
+      attributes: true,
+      attributeFilter: ['hidden', 'open', 'aria-hidden', 'aria-expanded'],
+    });
     window.addEventListener('popstate', () => scheduleRefresh(300));
   }
   if (options.autoplay) {

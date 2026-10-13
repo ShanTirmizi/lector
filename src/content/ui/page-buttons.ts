@@ -122,4 +122,9 @@ export class Toast {
     this.root.append(el);
     this.timer = window.setTimeout(() => el.remove(), duration ?? (action ? 7000 : 4200));
   }
+
+  hide(): void {
+    clearTimeout(this.timer);
+    this.el?.remove();
+  }
 }
