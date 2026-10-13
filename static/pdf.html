@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Lector</title>
+    <link rel="icon" href="icons/icon-32.png" />
+    <link rel="stylesheet" href="reader.css" />
+    <script type="module" src="pdf.js"></script>
+  </head>
+  <body class="pdf">
+    <header class="bar">
+      <img src="icons/icon-48.png" alt="" width="24" height="24" />
+      <strong id="title">PDF</strong>
+      <a id="original" hidden target="_blank" rel="noreferrer">Open the original</a>
+    </header>
+    <p id="status" role="status" hidden></p>
+    <label id="drop" hidden>
+      <input id="file" type="file" accept="application/pdf,.pdf" />
+      <strong>Drop a PDF here</strong>
+      <span>or click to choose one from your computer</span>
+    </label>
+    <main id="pages"></main>
+  </body>
+</html>

@@ -32,6 +32,8 @@ const entries = [
   { entryPoints: { content: 'src/content/index.ts' }, format: 'iife' },
   { entryPoints: { offscreen: 'src/offscreen/index.ts' }, format: 'esm' },
   { entryPoints: { options: 'src/options/index.ts' }, format: 'esm' },
+  { entryPoints: { pdf: 'src/pdf/index.ts' }, format: 'esm' },
+  { entryPoints: { document: 'src/document/index.ts' }, format: 'esm' },
   {
     entryPoints: { 'engine-worker': 'src/offscreen/worker.ts' },
     format: 'esm',
@@ -51,6 +53,12 @@ async function copyStatic() {
   for (const file of await readdir(ortDist)) {
     if (/^ort-wasm-simd-threaded.*\.(mjs|wasm)$/.test(file)) await cp(path.join(ortDist, file), path.join(dist, 'ort', file));
   }
+
+  // pdf.js: its worker, plus the character maps, fonts and decoders some PDFs need.
+  const pdfjs = path.join(root, 'node_modules/pdfjs-dist');
+  await mkdir(path.join(dist, 'pdfjs'), { recursive: true });
+  await cp(path.join(pdfjs, 'build/pdf.worker.min.mjs'), path.join(dist, 'pdfjs/pdf.worker.min.mjs'));
+  for (const dir of ['cmaps', 'standard_fonts', 'wasm']) await cp(path.join(pdfjs, dir), path.join(dist, 'pdfjs', dir), { recursive: true });
 
   const voiceDir = path.join(root, 'node_modules/kokoro-js/voices');
   await mkdir(path.join(dist, 'voices'), { recursive: true });

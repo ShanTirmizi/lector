@@ -31,9 +31,29 @@ async function sendToTab(tabId: number | undefined, message: ToContent): Promise
   if (tabId === undefined) return;
   try {
     await chrome.tabs.sendMessage(tabId, message);
+    return;
   } catch {
-    // The page has no content script (browser pages, the web store, a tab opened before install).
+    // No content script answered: a browser page, a tab opened before install, or one of our own pages.
   }
+  const tab = await chrome.tabs.get(tabId).catch(() => undefined);
+  const url = tab?.url ?? '';
+  if (url.startsWith(chrome.runtime.getURL(''))) {
+    // Lector's own PDF and document views listen for broadcasts addressed to their tab.
+    await chrome.runtime.sendMessage({ ...message, forTab: tabId }).catch(() => undefined);
+  } else if (message.type === 'toggle' && /\.pdf($|[?#])/i.test(url)) {
+    await openPdf(url, tab);
+  }
+}
+
+async function openPdf(url: string, from?: chrome.tabs.Tab): Promise<void> {
+  await chrome.tabs.create({ url: `${chrome.runtime.getURL('pdf.html')}?file=${encodeURIComponent(url)}`, index: from ? from.index + 1 : undefined, openerTabId: from?.id });
+}
+
+async function openDocument(message: Extract<ToBackground, { type: 'open-document' }>, from?: chrome.tabs.Tab): Promise<void> {
+  const key = `document:${crypto.randomUUID()}`;
+  // Kept only for this browser session, and only so the new tab can pick it up.
+  await chrome.storage.session.set({ [key]: { title: message.title, html: message.html, source: message.source } });
+  await chrome.tabs.create({ url: `${chrome.runtime.getURL('document.html')}?key=${encodeURIComponent(key)}`, index: from ? from.index + 1 : undefined, openerTabId: from?.id });
 }
 
 async function activeTabId(): Promise<number | undefined> {
@@ -41,7 +61,7 @@ async function activeTabId(): Promise<number | undefined> {
   return tab?.id;
 }
 
-chrome.runtime.onMessage.addListener((message: ToBackground, _sender, respond) => {
+chrome.runtime.onMessage.addListener((message: ToBackground, sender, respond) => {
   if (message.type === 'ensure-engine') {
     ensureEngine().then(
       () => respond({ ok: true }),
@@ -50,6 +70,8 @@ chrome.runtime.onMessage.addListener((message: ToBackground, _sender, respond) =
     return true;
   }
   if (message.type === 'open-options') void chrome.runtime.openOptionsPage();
+  if (message.type === 'open-pdf') void openPdf(message.url, sender.tab);
+  if (message.type === 'open-document') void openDocument(message, sender.tab);
   return false;
 });
 

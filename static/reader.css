@@ -1,0 +1,107 @@
+/* Shared by Lector's own reading pages: the PDF view and the document view. */
+:root {
+  --green: #173f35;
+  --chalk: #f2f5ee;
+  --paper: #fdfdfb;
+  --rule: #d5ddd2;
+  --sage: #5d7468;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--chalk);
+  color: var(--green);
+  font: 15px/1.5 ui-rounded, "SF Pro Rounded", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+.bar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 48px;
+  padding: 0 18px;
+  background: rgba(242, 245, 238, 0.92);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--rule);
+}
+.bar img { border-radius: 6px; }
+.bar strong { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.bar a { color: var(--sage); text-underline-offset: 3px; white-space: nowrap; }
+.bar a:hover { color: var(--green); }
+#status { max-width: 560px; margin: 28px auto 0; padding: 0 20px; text-align: center; color: var(--sage); }
+#status.problem { color: #8a3b2c; }
+#drop {
+  display: grid;
+  gap: 4px;
+  place-items: center;
+  max-width: 520px;
+  margin: 32px auto;
+  padding: 44px 24px;
+  border: 2px dashed #9fb3a7;
+  border-radius: 20px;
+  background: var(--paper);
+  cursor: pointer;
+}
+#drop strong { font-size: 18px; }
+#drop span { color: var(--sage); }
+#drop input { position: absolute; opacity: 0; pointer-events: none; }
+#drop:focus-within { outline: 2px solid var(--green); outline-offset: 3px; }
+
+/* ----- PDF pages. The text layer rules are what pdf.js needs to place its text. */
+#pages { display: grid; justify-content: center; gap: 18px; padding: 24px 16px 140px; }
+.page {
+  position: relative;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(23, 63, 53, 0.16), 0 8px 24px rgba(23, 63, 53, 0.08);
+  --user-unit: 1;
+  --total-scale-factor: calc(var(--scale-factor) * var(--user-unit));
+}
+.page canvas { display: block; width: 100%; height: 100%; }
+.textLayer {
+  position: absolute;
+  inset: 0;
+  overflow: clip;
+  line-height: 1;
+  text-size-adjust: none;
+  forced-color-adjust: none;
+  transform-origin: 0 0;
+  /* Highlights darken the page beneath them instead of covering it. */
+  mix-blend-mode: multiply;
+  --min-font-size: 1;
+  --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
+  --min-font-size-inv: calc(1 / var(--min-font-size));
+}
+.textLayer :is(span, br) { position: absolute; color: transparent; white-space: pre; cursor: text; transform-origin: 0% 0%; }
+.textLayer > :not(.markedContent), .textLayer .markedContent span:not(.markedContent) {
+  z-index: 1;
+  --font-height: 0;
+  --scale-x: 1;
+  --rotate: 0deg;
+  font-size: calc(var(--text-scale-factor) * var(--font-height));
+  transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv));
+}
+.textLayer .markedContent { display: contents; }
+.textLayer ::selection { background: rgba(23, 63, 53, 0.22); }
+
+/* ----- Document view: a clean page of text. */
+body.document { background: var(--paper); }
+article {
+  max-width: 68ch;
+  margin: 0 auto;
+  padding: 48px 24px 160px;
+  color: #1c2622;
+  font: 19px/1.65 Charter, "Bitstream Charter", "Iowan Old Style", Georgia, serif;
+}
+article h1, article h2, article h3, article h4 { font-family: ui-rounded, "SF Pro Rounded", "Segoe UI", system-ui, sans-serif; line-height: 1.2; color: var(--green); margin: 1.6em 0 0.5em; }
+article h1 { font-size: 34px; letter-spacing: -0.01em; margin-top: 0; }
+article h2 { font-size: 25px; }
+article h3 { font-size: 20px; }
+article p { margin: 0 0 1em; }
+article a { color: inherit; text-underline-offset: 3px; }
+article table { border-collapse: collapse; margin: 1em 0; font-size: 16px; }
+article td, article th { border: 1px solid var(--rule); padding: 6px 10px; vertical-align: top; }
+article blockquote { margin: 1em 0; padding-left: 18px; border-left: 3px solid var(--rule); }

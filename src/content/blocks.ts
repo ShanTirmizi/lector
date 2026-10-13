@@ -37,7 +37,8 @@ const INLINE_TAGS = new Set([
 ]);
 const BLOCK_SELECTOR = 'p,div,li,ul,ol,dl,dt,dd,h1,h2,h3,h4,h5,h6,blockquote,table,tr,td,th,section,article,pre,figure,figcaption,header,main,hr,details,summary';
 // Class and id fragments that mark page furniture rather than content.
-const FURNITURE = /(^|[-_ ])(comments?|share|sharing|social|related|recirc\w*|promo\w*|advert\w*|ads?|sponsor\w*|newsletter|subscribe|paywall|cookie|consent|breadcrumbs?|sidebar|toolbar|menu|pagination|pager|popup|modal|outbrain|taboola|toc|navbox|mw-editsection|noprint|visually-hidden|sr-only|screen-reader-text)([-_ ]|$)/i;
+const FURNITURE = /(^|[-_ ])(comments?|share|sharing|social|related|recirc\w*|promo\w*|advert\w*|ads?|sponsor\w*|newsletter|subscribe|paywall|cookie|consent|breadcrumbs?|sidebar|toolbar|menu|pagination|pager|popup|modal|outbrain|taboola|toc|navbox|mw-editsection|mw-jump-link|noprint|hatnote|ambox|mbox|metadata|reflist|references|footnotes|infobox|catlinks|visually-hidden|sr-only|screen-reader-text)([-_ ]|$)/i;
+const CAPTION = /(^|[-_ ])(caption|thumbcaption|gallerytext|wp-caption-text|credit)([-_ ]|$)/i;
 const HEADINGS = new Set(['H1', 'H2', 'H3', 'H4', 'H5', 'H6']);
 
 function isCitationMarker(el: Element): boolean {
@@ -67,13 +68,14 @@ class Extractor {
     if (SKIPPED_TAGS.has(el.tagName.toUpperCase())) return true;
     const role = el.getAttribute('role');
     if (role && SKIPPED_ROLES.has(role)) return true;
-    if (this.options.skipCaptions && el.tagName === 'FIGCAPTION') return true;
+    if (this.options.skipCaptions && (el.tagName === 'FIGCAPTION' || el.tagName === 'CAPTION')) return true;
     if (this.options.skipCode && el.tagName === 'PRE') return true;
     if (this.options.skipCitations && isCitationMarker(el)) return true;
     if (el !== this.root) {
       const label = `${el.className && typeof el.className === 'string' ? el.className : ''} ${el.id}`;
       // A large element is never furniture, whatever it is called.
       if (label.length > 1 && FURNITURE.test(label) && (el.textContent ?? '').length < this.rootTextLength * 0.4) return true;
+      if (this.options.skipCaptions && label.length > 1 && CAPTION.test(label) && (el.textContent ?? '').length < 600) return true;
     }
     return isHidden(el);
   }

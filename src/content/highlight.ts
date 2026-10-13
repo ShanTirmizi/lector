@@ -32,7 +32,8 @@ export class Highlighter {
   private dark = false;
   private supported = typeof CSS !== 'undefined' && 'highlights' in CSS && typeof Highlight === 'function';
 
-  constructor() {
+  /** @param overlay  true when the text is invisible and sits on a picture of the page, as in a PDF */
+  constructor(private overlay = false) {
     this.style.dataset.lector = 'highlight';
     this.render();
   }
@@ -40,9 +41,11 @@ export class Highlighter {
   private render(): void {
     const [r, g, b] = INK[this.color];
     const sentence = this.dark ? `rgba(${r}, ${g}, ${b}, 0.26)` : `rgba(${r}, ${g}, ${b}, 0.30)`;
+    // Over a picture of the page the colour must stay see-through, like real highlighter ink.
+    const word = this.overlay ? `background-color: rgba(${r}, ${g}, ${b}, 0.62);` : `background-color: rgb(${r}, ${g}, ${b}); color: #17130a;`;
     this.style.textContent = `
-      ::highlight(${SENTENCE}) { background-color: ${sentence}; }
-      ::highlight(${WORD}) { background-color: rgb(${r}, ${g}, ${b}); color: #17130a; }
+      ::highlight(${SENTENCE}) { background-color: ${this.overlay ? `rgba(${r}, ${g}, ${b}, 0.34)` : sentence}; }
+      ::highlight(${WORD}) { ${word} }
     `;
   }
 

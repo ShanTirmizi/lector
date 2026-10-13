@@ -3,7 +3,7 @@ import path from 'node:path';
 
 const shots = path.resolve('test/shots');
 
-export async function run({ page, command, check, waitFor, sleep }) {
+export async function run({ page, context, worker, command, check, waitFor, sleep, base, extension }) {
   const ui = (selector, options) => page.locator(`lector-ui ${selector}`, options);
   const highlighted = (name) =>
     page.evaluate((n) => {
@@ -125,4 +125,73 @@ export async function run({ page, command, check, waitFor, sleep }) {
   await ui('button[aria-label="Close the player"]').click();
   await sleep(300);
   check('closing clears the page', (await highlighted('lector-sentence')) === null && (await ui('.player').isHidden()));
+
+  // ---------------------------------------------------------------- settings
+  const options = await context.newPage();
+  await options.goto(`${extension}/options.html`);
+  await options.locator('#voice').waitFor();
+  await options.screenshot({ path: path.join(shots, '09-settings.png'), fullPage: true });
+  await options.locator('input[data-key="skipCaptions"]').uncheck();
+  await sleep(300);
+  const stored = await worker.evaluate(async () => (await chrome.storage.local.get('settings')).settings);
+  check('settings page saves changes', stored.skipCaptions === false && stored.highlightColor === 'mint', JSON.stringify({ skipCaptions: stored.skipCaptions, color: stored.highlightColor }));
+  await options.locator('input[data-key="skipCaptions"]').check();
+  await options.close();
+
+  // --------------------------------------------------------------------- PDF
+  const pdf = await context.newPage();
+  await pdf.goto(`${extension}/pdf.html?file=${encodeURIComponent(`${base}/report.pdf`)}`);
+  await pdf.bringToFront();
+  const pdfUi = (selector) => pdf.locator(`lector-ui ${selector}`);
+  const pdfRead = (name) =>
+    pdf.evaluate((n) => {
+      const highlight = CSS.highlights.get(n);
+      return highlight ? [...highlight].map((range) => range.toString()).join(' ').replace(/\s+/g, ' ') : null;
+    }, name);
+  await pdf.locator('.page').nth(2).waitFor({ timeout: 20_000 });
+  check('PDF pages are drawn', (await pdf.locator('.page').count()) === 3);
+  await pdfUi('.launcher').waitFor({ state: 'visible', timeout: 10_000 }).catch(() => {});
+  await worker.evaluate(() => chrome.storage.local.set({ settings: { rate: 3 } }));
+  await sleep(400);
+  await command({ type: 'toggle' }); // goes through the service worker, as the toolbar button does
+  await pdfUi('.player').waitFor({ state: 'visible', timeout: 10_000 });
+  const pdfSentences = [];
+  const pdfUntil = Date.now() + 45_000;
+  while (Date.now() < pdfUntil) {
+    const sentence = await pdfRead('lector-sentence');
+    if (sentence && pdfSentences.at(-1) !== sentence) pdfSentences.push(sentence);
+    if ((await pdfUi('.status').innerText().catch(() => '')) === 'Finished') break;
+    await sleep(50);
+  }
+  await pdf.screenshot({ path: path.join(shots, '10-pdf.png') });
+  const pdfText = pdfSentences.join(' | ');
+  console.log(pdfSentences.map((s, i) => `   ${i + 1}. ${s}`).join('\n'));
+  check('PDF is read to the end', pdfText.includes('The sleeper is back'));
+  check('running header and page numbers are skipped', !pdfText.includes('Night Train Review') && !/\| [123] \|/.test(pdfText));
+  check('a paragraph that crosses a page is kept together', pdfSentences.some((s) => s.includes('across the break') && s.includes('onto the following page')));
+  check('PDF headings are read on their own', pdfSentences.includes('Costs') && pdfSentences.includes('Conclusion'));
+  await pdf.close();
+  await worker.evaluate(() => chrome.storage.local.clear());
+
+  // ------------------------------------------------------------ document view
+  await worker.evaluate(() =>
+    chrome.storage.session.set({
+      'document:test': {
+        title: 'Trip notes',
+        source: 'https://docs.google.com/document/d/abc/edit',
+        html: '<p class="c1 title"><span>Trip notes</span></p><p onclick="window.hacked=1"><span class="c2">We left after dinner and woke up in the mountains.</span> <a href="javascript:window.hacked=2">A link</a></p><script>window.hacked=3</script><img src="x" onerror="window.hacked=4"><ul><li><span>Bring a jumper.</span></li></ul>',
+      },
+    }),
+  );
+  const doc = await context.newPage();
+  await doc.goto(`${extension}/document.html?key=document:test`);
+  await doc.bringToFront();
+  await doc.locator('article h1').waitFor();
+  await waitFor(async () => (await doc.locator('lector-ui .play').getAttribute('aria-label').catch(() => null)) === 'Pause', 60_000, 'document to start reading');
+  await sleep(1500);
+  await doc.screenshot({ path: path.join(shots, '11-document.png') });
+  check('document view starts reading by itself', true);
+  const clean = await doc.evaluate(() => ({ hacked: window.hacked ?? null, scripts: document.querySelectorAll('article script, article img, article [onclick]').length, link: document.querySelector('article a')?.getAttribute('href') ?? null, h1: document.querySelector('article h1').textContent }));
+  check('document view strips anything active', clean.hacked === null && clean.scripts === 0 && clean.link === null && clean.h1 === 'Trip notes', JSON.stringify(clean));
+  await doc.close();
 }

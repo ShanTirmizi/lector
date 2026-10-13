@@ -16,9 +16,10 @@ export class Launcher {
     root.append(this.el);
   }
 
+  /** @param seconds  listening time to show, or 0 when it is not known yet */
   show(seconds: number): void {
     this.label.textContent = 'Listen';
-    this.time.textContent = formatDuration(seconds);
+    this.time.textContent = seconds > 0 ? formatDuration(seconds) : '';
     this.el.hidden = false;
   }
 

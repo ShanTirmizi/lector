@@ -40,7 +40,11 @@ export type FromEngine =
   | { type: 'displaced' };
 
 /** One-off messages handled by the service worker. */
-export type ToBackground = { type: 'ensure-engine' } | { type: 'open-options' };
+export type ToBackground =
+  | { type: 'ensure-engine' }
+  | { type: 'open-options' }
+  | { type: 'open-pdf'; url: string }
+  | { type: 'open-document'; title: string; html: string; source: string };
 
 /** Commands the service worker sends to a tab. */
 export type ToContent =

@@ -82,7 +82,7 @@ try {
   await page.bringToFront();
 
   const { run } = await import('./e2e-steps.mjs');
-  await run({ page, context, worker, command, check, waitFor, sleep, engineLog, base });
+  await run({ page, context, worker, command, check, waitFor, sleep, engineLog, base, extension: worker.url().split('/').slice(0, 3).join('/') });
 } catch (error) {
   console.log('FAIL  uncaught:', error.message);
   failures++;

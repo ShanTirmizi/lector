@@ -2,8 +2,90 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Lector settings</title>
+    <link rel="icon" href="icons/icon-32.png" />
+    <link rel="stylesheet" href="options.css" />
     <script type="module" src="options.js"></script>
   </head>
-  <body></body>
+  <body>
+    <main>
+      <header>
+        <img src="icons/icon-128.png" alt="" width="44" height="44" />
+        <div>
+          <h1>Lector</h1>
+          <p>Changes are saved as you make them and apply to open pages straight away.</p>
+        </div>
+      </header>
+
+      <section>
+        <h2>Voice</h2>
+        <div class="row">
+          <label for="voice">Reads in the voice of</label>
+          <div class="inline">
+            <select id="voice"></select>
+            <button type="button" id="preview" class="quiet">Hear it</button>
+          </div>
+        </div>
+        <div class="row">
+          <label for="rate">Speed</label>
+          <div class="inline">
+            <input id="rate" type="range" min="0.5" max="4" step="0.05" />
+            <output id="rate-value"></output>
+          </div>
+        </div>
+        <p class="note">The voice runs on this computer. Nothing you read is sent anywhere.</p>
+      </section>
+
+      <section>
+        <h2>While reading</h2>
+        <label class="check"><input type="checkbox" data-key="highlightSentence" /><span>Highlight the sentence being read</span></label>
+        <label class="check"><input type="checkbox" data-key="highlightWord" /><span>Highlight each word as it is spoken</span></label>
+        <label class="check"><input type="checkbox" data-key="autoScroll" /><span>Scroll along with the voice</span></label>
+        <div class="row">
+          <span>Highlighter colour</span>
+          <div class="swatches" id="colors"></div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Leave out</h2>
+        <label class="check"><input type="checkbox" data-key="skipCitations" /><span>Citation markers such as [12]</span></label>
+        <label class="check"><input type="checkbox" data-key="skipUrls" /><span>Web addresses written out in the text</span></label>
+        <label class="check"><input type="checkbox" data-key="skipCaptions" /><span>Image captions</span></label>
+        <label class="check"><input type="checkbox" data-key="skipCode" /><span>Blocks of code</span></label>
+        <label class="check"><input type="checkbox" data-key="skipBrackets" /><span>Anything in [square brackets]</span></label>
+        <label class="check"><input type="checkbox" data-key="skipParentheses" /><span>Anything in (parentheses)</span></label>
+        <p class="note">Menus, sidebars, adverts and footers are always left out.</p>
+      </section>
+
+      <section>
+        <h2>Buttons on the page</h2>
+        <label class="check"><input type="checkbox" data-key="launcher" /><span>Listen tab on the edge of articles</span></label>
+        <label class="check"><input type="checkbox" data-key="paragraphButton" /><span>Play button beside the paragraph under the pointer</span></label>
+        <label class="check"><input type="checkbox" data-key="selectionButton" /><span>Listen button next to selected text</span></label>
+        <div id="sites" hidden>
+          <h3>Hidden on these sites</h3>
+          <ul id="site-list"></ul>
+        </div>
+      </section>
+
+      <section>
+        <h2>Shortcuts</h2>
+        <dl class="keys">
+          <div><dt><kbd>Alt</kbd> <kbd>R</kbd></dt><dd>Play or pause. Starts reading the page if nothing is playing.</dd></div>
+          <div><dt><kbd>Alt</kbd> <kbd>Shift</kbd> <kbd>R</kbd></dt><dd>Read the selected text.</dd></div>
+          <div><dt><kbd>Alt</kbd> <kbd>.</kbd> and <kbd>Alt</kbd> <kbd>,</kbd></dt><dd>Next and previous sentence. Add <kbd>Shift</kbd> for paragraphs.</dd></div>
+          <div><dt><kbd>Alt</kbd> <kbd>=</kbd> and <kbd>Alt</kbd> <kbd>-</kbd></dt><dd>Faster and slower.</dd></div>
+        </dl>
+        <p class="note">On a Mac, Alt is the Option key. <button type="button" id="shortcuts" class="link">Change the first two in Chrome's shortcut settings</button></p>
+      </section>
+
+      <section>
+        <h2>Voice model</h2>
+        <p id="model-status" class="note"></p>
+        <button type="button" id="clear-model" class="quiet">Remove the downloaded voice model</button>
+      </section>
+    </main>
+  </body>
 </html>

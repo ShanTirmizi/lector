@@ -33,7 +33,7 @@ export interface Snapshot {
 
 export class Reader {
   private engine: EngineClient;
-  private highlighter = new Highlighter();
+  private highlighter: Highlighter;
   private scroller: Scroller;
   private reading: Reading | null = null;
   private index = 0;
@@ -50,7 +50,11 @@ export class Reader {
   private detached = true;
   private listeners = new Set<(snapshot: Snapshot) => void>();
 
-  constructor(private settings: Settings) {
+  constructor(
+    private settings: Settings,
+    overlay = false,
+  ) {
+    this.highlighter = new Highlighter(overlay);
     this.engine = new EngineClient(
       (message) => this.onEngine(message),
       () => this.onDetached(),
