@@ -44,7 +44,9 @@ async function handOff(open: () => Promise<void>): Promise<void> {
 // hear that and remove themselves.
 const RETIRE = 'lector:retire';
 document.dispatchEvent(new CustomEvent(RETIRE));
-document.querySelectorAll(HOST_TAG).forEach((old) => old.remove());
+// Copies too old to know about retiring put their controls back if they are removed,
+// so what they left behind is hidden in place instead.
+for (const old of Array.from(document.querySelectorAll<HTMLElement>(HOST_TAG))) old.style.setProperty('display', 'none', 'important');
 
 const googleDoc = location.hostname === 'docs.google.com' ? location.pathname.match(/^\/document\/(?:u\/\d+\/)?d\/([^/]+)/) : null;
 

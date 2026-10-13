@@ -88,6 +88,8 @@ async function load(data: ArrayBuffer, name: string): Promise<void> {
       const node = spans[i]?.firstChild;
       if (!node || node.nodeType !== Node.TEXT_NODE || !spans[i].isConnected) return;
       const size = Math.hypot(item.transform[2], item.transform[3]) || item.height;
+      // Text printed sideways is a margin stamp or a figure label, not part of the reading.
+      if (Math.abs(item.transform[1]) > Math.abs(item.transform[0])) return;
       pieces.push({ node: node as Text, text: item.str, x: item.transform[4], y: item.transform[5], width: item.width, size });
       if (item.str.trim()) for (let k = 0; k < item.str.length; k += 40) sizes.push(size);
     });

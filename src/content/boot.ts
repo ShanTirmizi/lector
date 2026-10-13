@@ -279,6 +279,8 @@ export async function boot(options: BootOptions = {}): Promise<Booted | null> {
 
   let pointer: { target: EventTarget | null; y: number; own: boolean } | null = null;
   let pointerFrame = 0;
+  let hoverIndex = -1;
+  let hoverTimer = 0;
   document.addEventListener(
     'mousemove',
     (event) => {
@@ -292,14 +294,29 @@ export async function boot(options: BootOptions = {}): Promise<Booted | null> {
         if (!page) return;
         const reading = getPage();
         const index = blockAt(reading, pointer.target as Node, pointer.y);
+        if (index === hoverIndex) return;
+        hoverIndex = index;
+        clearTimeout(hoverTimer);
         if (index < 0) return paragraphButton.hideSoon();
-        mount();
-        paragraphButton.showAt(index, ...linePosition(reading.blocks[index]));
+        // Only when the pointer rests on a paragraph, so the button does not flicker as it passes over the page.
+        hoverTimer = window.setTimeout(() => {
+          if (retired || hoverIndex !== index || getPage() !== reading) return;
+          mount();
+          paragraphButton.showAt(index, ...linePosition(reading.blocks[index]));
+        }, 160);
       });
     },
     { passive: true },
   );
-  document.addEventListener('scroll', () => paragraphButton.hide(), { capture: true, passive: true });
+  document.addEventListener(
+    'scroll',
+    () => {
+      hoverIndex = -1;
+      clearTimeout(hoverTimer);
+      paragraphButton.hide();
+    },
+    { capture: true, passive: true },
+  );
   document.documentElement.addEventListener('mouseleave', () => paragraphButton.hideSoon());
 
   function linePosition(block: Block): [DOMRect, number] {
@@ -370,6 +387,9 @@ export async function boot(options: BootOptions = {}): Promise<Booted | null> {
     'keydown',
     (event) => {
       if (retired || !reader.isActive || !event.altKey || event.ctrlKey || event.metaKey) return;
+      // While typing, Alt with a key is how many keyboards produce other characters.
+      const typing = event.composedPath()[0];
+      if (typing instanceof HTMLElement && (typing.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(typing.tagName))) return;
       const handled = (() => {
         switch (event.code) {
           case 'Period':
@@ -399,6 +419,11 @@ export async function boot(options: BootOptions = {}): Promise<Booted | null> {
   let lastUrl = location.href;
   const refresh = () => {
     if (retired) return;
+    // Nobody is looking at a background tab. Catch up when it is shown again.
+    if (document.hidden) {
+      document.addEventListener('visibilitychange', () => scheduleRefresh(300), { once: true });
+      return;
+    }
     if (location.href !== lastUrl) {
       // A single-page app moved to another article.
       lastUrl = location.href;

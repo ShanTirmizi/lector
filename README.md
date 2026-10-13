@@ -22,6 +22,8 @@ limit, and nothing you read leaves the browser.
 - **Floating player.** Play and pause, previous and next sentence, speed from
   0.5× to 4×, fifteen voices with previews, and quick options. Drag it wherever
   you like.
+- **Scrub through the text.** Hover the progress line to see the sentence at
+  that point, click or drag to jump there.
 - **PDFs.** Opens them in its own view, rebuilds paragraphs from the page
   layout, and skips running headers and page numbers.
 - **Google Docs.** Opens the document as a clean page of text and reads that.
@@ -69,8 +71,9 @@ On a Mac, `Alt` is the Option key. The first two can be changed at
 ```
 
 - **Finding the text.** Paragraphs vote for the container they sit in; the
-  container with the most paragraph text is the article. Every character keeps
-  a link back to its place in the page (`src/content/blocks.ts`).
+  container with the most paragraph text is the article. Comment sections do
+  not get a vote unless the page is nothing but discussion. Every character
+  keeps a link back to its place in the page (`src/content/blocks.ts`).
 - **Speaking.** Sentences go to an offscreen document, which runs
   [Kokoro](https://huggingface.co/hexgrad/Kokoro-82M) in a worker and plays the
   result. A few sentences are always prepared ahead (`src/offscreen/`).
@@ -105,8 +108,10 @@ A longer walkthrough with diagrams is in [docs/how-it-works.html](docs/how-it-wo
 ```bash
 npm run watch        # rebuild on change
 npm run typecheck
-npm test             # drives the built extension in Chromium on test pages
-node scripts/try.mjs https://example.com/some-article   # try it on a real page
+npm test             # structure tests, then drives the built extension in Chromium
+node scripts/extract.mjs <url>  # show what would be read on a page, without the voice
+node scripts/try.mjs <url>      # read a real page for a while and report
+node scripts/qa.mjs             # the same over a list of sites
 node scripts/voice-check.mjs    # speak, transcribe back, and measure speed
 ```
 

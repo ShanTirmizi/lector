@@ -67,6 +67,14 @@ export async function runEdge({ context, worker, command, check, waitFor, sleep,
   await sleep(1500);
   check('rapid skipping settles and keeps playing', (await a.label()) === 'Pause' && !(await a.ui('.status.problem').count()), afterBurst?.slice(0, 60));
 
+  // Hearing another voice pauses the reading, then hands back.
+  await a.ui('.chip.voice').click();
+  await a.ui('.voice-row .try').nth(3).click();
+  await waitFor(async () => (await a.label()) === 'Play', 8_000, 'reading to pause for the sample');
+  await waitFor(async () => (await a.label()) === 'Pause', 30_000, 'reading to resume after the sample');
+  await page.keyboard.press('Escape');
+  check('a voice sample pauses the reading and then hands back', true);
+
   // Settings apply while playing.
   await setSettings({ highlightWord: false });
   await waitFor(async () => (await a.read('lector-word')) === null, 5_000, 'word highlight to switch off');

@@ -162,7 +162,7 @@ svg { display: block; }
 
 .status {
   /* A fixed width, so the buttons do not shift under the pointer when the text changes. */
-  width: 158px;
+  width: 142px;
   padding: 0 8px;
   color: var(--sage);
   font-variant-numeric: tabular-nums;

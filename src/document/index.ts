@@ -44,9 +44,10 @@ function copyClean(source: Node, target: Node): void {
         copy.setAttribute('rel', 'noreferrer noopener');
       }
     }
-    for (const span of ['colspan', 'rowspan']) {
-      const value = element.getAttribute(span);
-      if (value && /^\d{1,3}$/.test(value)) copy.setAttribute(span, value);
+    // Numbers that carry meaning: table spans, and where a numbered list picks up.
+    for (const name of ['colspan', 'rowspan', 'start']) {
+      const value = element.getAttribute(name);
+      if (value && /^\d{1,4}$/.test(value)) copy.setAttribute(name, value);
     }
     copyClean(element, copy);
     target.appendChild(copy);

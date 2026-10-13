@@ -163,6 +163,7 @@ export async function run({ page, context, worker, command, check, waitFor, slee
     }, name);
   await pdf.locator('.page').nth(2).waitFor({ timeout: 20_000 });
   check('PDF pages are drawn', (await pdf.locator('.page').count()) === 3);
+  check('the drop zone is hidden once a PDF is open', !(await pdf.locator('#drop').isVisible()));
   await pdfUi('.launcher').waitFor({ state: 'visible', timeout: 10_000 }).catch(() => {});
   await worker.evaluate(() => chrome.storage.local.set({ settings: { rate: 3 } }));
   await sleep(400);
