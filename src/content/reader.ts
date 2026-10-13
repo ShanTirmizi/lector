@@ -158,7 +158,13 @@ export class Reader {
   play(): void {
     if (!this.reading) return;
     if (this.detached || this.state === 'error') return this.load(true);
-    if (this.state === 'ended') this.index = 0;
+    if (this.state === 'ended') {
+      // Reading again: show the first sentence now, since the engine will report the position we already hold.
+      this.index = 0;
+      this.words = [];
+      this.wordsIndex = -1;
+      this.showSentence(true, true);
+    }
     this.engine.sendIfConnected({ type: 'play' });
   }
 

@@ -111,6 +111,7 @@ export async function boot(options: BootOptions = {}): Promise<Booted | null> {
       mount();
       return toast.show('Lector found no text to read on this page. Select some text and try again.');
     }
+    if (!speaksLanguage(reading)) return;
     if (blockIndex !== undefined) return reader.startAtBlock(reading, blockIndex);
     chrome.storage.local
       .get('places')
@@ -124,10 +125,32 @@ export async function boot(options: BootOptions = {}): Promise<Booted | null> {
       });
   }
 
+  /**
+   * The voices only speak English. Text in another script is refused, since it
+   * would come out as noise; text in another Latin-script language is read with a warning.
+   */
+  function speaksLanguage(reading: Reading): boolean {
+    const sample = reading.units.slice(0, 40).map((unit) => unit.spoken).join(' ');
+    const letters = sample.match(/\p{L}/gu) ?? [];
+    const latin = sample.match(/\p{Script=Latin}/gu) ?? [];
+    if (letters.length > 20 && latin.length < letters.length * 0.5) {
+      mount();
+      toast.show('Lector only has English voices for now, and this text is in another language.');
+      return false;
+    }
+    const lang = (reading.blocks[0]?.el.closest('[lang]')?.getAttribute('lang') ?? '').toLowerCase();
+    if (lang && !lang.startsWith('en') && reading === page) {
+      mount();
+      toast.show('This page is not marked as English. Lector only has English voices, so it may sound wrong.');
+    }
+    return true;
+  }
+
   function startSelection(): boolean {
     const mapped = readSelection(settings);
     const reading = mapped ?? plainSelection();
     if (!reading) return false;
+    if (!speaksLanguage(reading)) return true;
     // The highlight takes over from the selection, which would otherwise sit on top of it.
     if (mapped) window.getSelection()?.removeAllRanges();
     selectionButton.hide();

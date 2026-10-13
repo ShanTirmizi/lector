@@ -81,8 +81,10 @@ try {
   await page.goto(`${base}/article.html`);
   await page.bringToFront();
 
-  const { run } = await import('./e2e-steps.mjs');
-  await run({ page, context, worker, command, check, waitFor, sleep, engineLog, base, extension: worker.url().split('/').slice(0, 3).join('/') });
+  const tools = { page, context, worker, command, check, waitFor, sleep, engineLog, base, extension: worker.url().split('/').slice(0, 3).join('/') };
+  const only = process.argv.find((a) => a.startsWith('--only='))?.slice(7);
+  if (only !== 'edge') await (await import('./e2e-steps.mjs')).run(tools);
+  if (only !== 'main') await (await import('./e2e-edge.mjs')).runEdge(tools);
 } catch (error) {
   console.log('FAIL  uncaught:', error.message);
   failures++;

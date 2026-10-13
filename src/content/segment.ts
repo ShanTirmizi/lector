@@ -22,7 +22,8 @@ export interface Unit {
 
 export type SpeakOptions = Pick<Settings, 'skipCitations' | 'skipUrls' | 'skipBrackets' | 'skipParentheses'>;
 
-const MAX_UNIT = 300;
+// Long enough to keep a sentence's melody, short enough that the voice never takes long to prepare one.
+const MAX_UNIT = 240;
 const MIN_UNIT = 24;
 
 // A full stop after one of these does not end a sentence.

@@ -37,7 +37,7 @@ const INLINE_TAGS = new Set([
 ]);
 const BLOCK_SELECTOR = 'p,div,li,ul,ol,dl,dt,dd,h1,h2,h3,h4,h5,h6,blockquote,table,tr,td,th,section,article,pre,figure,figcaption,header,main,hr,details,summary';
 // Class and id fragments that mark page furniture rather than content.
-const FURNITURE = /(^|[-_ ])(comments?|share|sharing|social|related|recirc\w*|promo\w*|advert\w*|ads?|sponsor\w*|newsletter|subscribe|paywall|cookie|consent|breadcrumbs?|sidebar|toolbar|menu|pagination|pager|popup|modal|outbrain|taboola|toc|navbox|mw-editsection|mw-jump-link|noprint|hatnote|ambox|mbox|metadata|reflist|references|footnotes|infobox|catlinks|visually-hidden|sr-only|screen-reader-text)([-_ ]|$)/i;
+const FURNITURE = /(^|[-_ ])(comments?|share|sharing|social|related|recirc\w*|promo\w*|advert\w*|ads?|sponsor\w*|newsletter|subscribe|paywall|cookie|consent|breadcrumbs?|sidebar|toolbar|menu|pagination|pager|popup|modal|outbrain|taboola|toc|navbox|mw-editsection|mw-jump-link|noprint|hatnote|ambox|baseline-indicator|mbox|metadata|reflist|references|footnotes|infobox|catlinks|visually-hidden|sr-only|screen-reader-text)([-_ ]|$)/i;
 const CAPTION = /(^|[-_ ])(caption|thumbcaption|gallerytext|wp-caption-text|credit)([-_ ]|$)/i;
 const HEADINGS = new Set(['H1', 'H2', 'H3', 'H4', 'H5', 'H6']);
 
