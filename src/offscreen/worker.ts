@@ -106,6 +106,8 @@ async function synth(request: WorkerRequest): Promise<void> {
       } catch (again) {
         console.warn('[lector] WebGPU is not usable, switching to WebAssembly', again);
         engine = start('wasm');
+        // If this fails too, forget it, so the next request starts from scratch.
+        engine.catch(() => (engine = null));
         speech = await (await engine).speak(request.text, request.voice);
       }
     }

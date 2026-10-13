@@ -41,12 +41,13 @@ async function sendToTab(tabId: number | undefined, message: ToContent): Promise
   if (url.startsWith(chrome.runtime.getURL(''))) {
     // Lector's own PDF and document views listen for broadcasts addressed to their tab.
     await chrome.runtime.sendMessage({ ...message, forTab: tabId }).catch(() => undefined);
-  } else if (message.type === 'toggle' && /\.pdf($|[?#])/i.test(url) && !(await inject(tabId))) {
-    await openPdf(url, tab);
   } else if (await inject(tabId)) {
     // Give the freshly added script a moment to start listening, then try once more.
     await new Promise((resolve) => setTimeout(resolve, 250));
     await chrome.tabs.sendMessage(tabId, message).catch(() => undefined);
+  } else if (message.type === 'toggle' && /\.pdf($|[?#])/i.test(url)) {
+    // Chrome would not let a script into this tab, but the address says it is a PDF.
+    await openPdf(url, tab);
   }
 }
 
@@ -72,8 +73,11 @@ async function openPdf(url: string, from?: chrome.tabs.Tab): Promise<void> {
 }
 
 async function openDocument(message: Extract<ToBackground, { type: 'open-document' }>, from?: chrome.tabs.Tab): Promise<void> {
-  const key = `document:${crypto.randomUUID()}`;
+  const key = `document:${Date.now()}:${crypto.randomUUID()}`;
   // Kept only for this browser session, and only so the new tab can pick it up.
+  // Older hand-overs are cleared first; the last few stay so their tabs survive a reload.
+  const old = Object.keys(await chrome.storage.session.get(null)).filter((k) => k.startsWith('document:')).sort();
+  await chrome.storage.session.remove(old.slice(0, Math.max(0, old.length - 3)));
   await chrome.storage.session.set({ [key]: { title: message.title, html: message.html, source: message.source } });
   await chrome.tabs.create({ url: `${chrome.runtime.getURL('document.html')}?key=${encodeURIComponent(key)}`, index: from ? from.index + 1 : undefined, openerTabId: from?.id });
 }
@@ -93,7 +97,13 @@ chrome.runtime.onMessage.addListener((message: ToBackground, sender, respond) =>
   }
   if (message.type === 'open-options') void chrome.runtime.openOptionsPage();
   if (message.type === 'open-pdf') void openPdf(message.url, sender.tab);
-  if (message.type === 'open-document') void openDocument(message, sender.tab);
+  if (message.type === 'open-document') {
+    openDocument(message, sender.tab).then(
+      () => respond({ ok: true }),
+      () => respond({ ok: false }),
+    );
+    return true;
+  }
   return false;
 });
 

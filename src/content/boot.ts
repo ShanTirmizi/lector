@@ -30,6 +30,8 @@ export interface Booted {
   /** Call when the text supplied by `readPage` has changed. */
   refresh(): void;
   start(): void;
+  /** Ends any reading in progress. */
+  stop(): void;
 }
 
 export async function boot(options: BootOptions = {}): Promise<Booted | null> {
@@ -37,7 +39,16 @@ export async function boot(options: BootOptions = {}): Promise<Booted | null> {
   if (!document.body || !(document.documentElement instanceof HTMLElement)) return null;
   const extract = options.readPage ?? readPage;
 
+  // Listen for a newer copy of this script straight away, before anything asynchronous,
+  // so that two copies starting together cannot both survive (see content/index.ts).
+  let retired = false;
+  let retire = () => {
+    retired = true;
+  };
+  document.addEventListener('lector:retire', () => retire(), { once: true });
+
   let settings = await loadSettings();
+  if (retired) return null;
   const reader = new Reader(settings, options.overlayHighlight ?? false);
 
   const host = document.createElement(HOST_TAG);
@@ -45,20 +56,16 @@ export async function boot(options: BootOptions = {}): Promise<Booted | null> {
   const sheet = document.createElement('style');
   sheet.textContent = styles;
   root.append(sheet);
-  /** Set when a newer copy of this script takes over the page (see content/index.ts). */
-  let retired = false;
   const mount = () => {
     if (!retired && !host.isConnected) document.documentElement.append(host);
   };
-  document.addEventListener(
-    'lector:retire',
-    () => {
-      retired = true;
-      reader.stop();
-      host.remove();
-    },
-    { once: true },
-  );
+  let observer: MutationObserver | null = null;
+  retire = () => {
+    retired = true;
+    observer?.disconnect();
+    reader.stop();
+    host.remove();
+  };
 
   // Changes apply at once and are written a moment later, so dragging a slider
   // does not flood storage (and every other tab) with updates.
@@ -416,7 +423,9 @@ export async function boot(options: BootOptions = {}): Promise<Booted | null> {
 
   let refreshTimer = 0;
   let refreshDelay = 1500;
-  let lastUrl = location.href;
+  // The address without its #fragment: following a link within the page is not leaving it.
+  const address = () => location.origin + location.pathname + location.search;
+  let lastUrl = address();
   const refresh = () => {
     if (retired) return;
     // Nobody is looking at a background tab. Catch up when it is shown again.
@@ -424,9 +433,10 @@ export async function boot(options: BootOptions = {}): Promise<Booted | null> {
       document.addEventListener('visibilitychange', () => scheduleRefresh(300), { once: true });
       return;
     }
-    if (location.href !== lastUrl) {
+    refreshWaitingSince = 0;
+    if (address() !== lastUrl) {
       // A single-page app moved to another article.
-      lastUrl = location.href;
+      lastUrl = address();
       if (reader.isActive) reader.stop();
     }
     if (reader.isActive) return;
@@ -436,15 +446,24 @@ export async function boot(options: BootOptions = {}): Promise<Booted | null> {
     refreshDelay = Math.min(20000, Math.max(1500, (performance.now() - started) * 50));
     refreshLauncher();
   };
+  // Each change to the page pushes the next look back a little, but never indefinitely:
+  // a page with a ticking clock would otherwise never be looked at.
+  let refreshWaitingSince = 0;
   const scheduleRefresh = (delay: number) => {
+    const now = performance.now();
+    refreshWaitingSince ||= now;
+    // The very first look should not be held up at all.
+    const latest = refreshWaitingSince + (page === null ? 1000 : Math.max(4000, delay * 3));
     clearTimeout(refreshTimer);
-    refreshTimer = window.setTimeout(() => (window.requestIdleCallback ?? window.setTimeout)(refresh), delay);
+    refreshTimer = window.setTimeout(() => (window.requestIdleCallback ?? window.setTimeout)(refresh), Math.max(0, Math.min(delay, latest - now)));
   };
   if (options.watch ?? true) {
-    new MutationObserver((records) => {
-      if (records.every((record) => record.target === host || host.contains(record.target))) return;
+    observer = new MutationObserver((records) => {
+      if (records.every((record) => record.target === host || host.contains(record.target) || [...record.addedNodes, ...record.removedNodes].every((node) => node === host))) return;
       scheduleRefresh(refreshDelay);
-    }).observe(document.body, {
+    });
+    // The whole document, not just <body>: some sites replace the body when they change page.
+    observer.observe(document.documentElement, {
       childList: true,
       subtree: true,
       characterData: true,
@@ -459,5 +478,5 @@ export async function boot(options: BootOptions = {}): Promise<Booted | null> {
     startPage();
   } else scheduleRefresh(400);
 
-  return { refresh, start: () => startPage() };
+  return { refresh, start: () => startPage(), stop: () => reader.stop() };
 }

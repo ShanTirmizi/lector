@@ -12,19 +12,18 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const dist = path.join(root, 'dist');
 const DEFAULT = [
   'https://en.wikipedia.org/wiki/Sleeping_car',
-  'https://www.bbc.com/future/article/20240111-the-return-of-europes-sleeper-trains',
-  'https://arstechnica.com/science/2024/01/what-happens-when-a-star-eats-a-planet/',
-  'https://www.theverge.com/2024/1/9/24032155/ces-2024-best-tech',
+  'https://paulgraham.com/hwh.html',
+  'https://simonwillison.net/2024/Dec/31/llms-in-2024/',
+  'https://slatestarcodex.com/2014/07/30/meditations-on-moloch/',
+  'https://blog.cloudflare.com/how-we-built-pingora-the-proxy-that-connects-cloudflare-to-the-internet/',
+  'https://www.propublica.org/article/how-the-irs-was-gutted',
+  'https://plato.stanford.edu/entries/consciousness/',
   'https://github.com/huggingface/transformers.js',
   'https://developer.mozilla.org/en-US/docs/Web/API/CSS_Custom_Highlight_API',
   'https://news.ycombinator.com/item?id=39000000',
-  'https://paulgraham.com/hwh.html',
   'https://www.gutenberg.org/files/1342/1342-h/1342-h.htm',
-  'https://stackoverflow.com/questions/11227809/why-is-processing-a-sorted-array-faster-than-processing-an-unsorted-array',
-  'https://www.nature.com/articles/d41586-024-00001-2',
-  'https://old.reddit.com/r/explainlikeimfive/top/?t=all',
-  'https://zh.wikipedia.org/wiki/%E5%8D%A7%E9%93%BA%E5%88%97%E8%BD%A6',
-  'https://example.com/',
+  'https://react.dev/learn/thinking-in-react',
+  'https://arxiv.org/abs/1706.03762',
 ];
 const urls = process.argv.slice(2).filter((a) => !a.startsWith('--'));
 const list = urls.length ? urls : DEFAULT;

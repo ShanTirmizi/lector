@@ -1,0 +1,7 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8" /><title>Live page</title></head>
+<body>
+<div>Updated <span id="clock">0</span> ticks ago</div>
+<article><h1>Live page</h1><p id="t1">This is sentence 1 of the live opening text, written long enough to count as real prose for the reader. This is sentence 2 of the live opening text, written long enough to count as real prose for the reader. This is sentence 3 of the live opening text, written long enough to count as real prose for the reader. This is sentence 4 of the live opening text, written long enough to count as real prose for the reader.</p><p id="t2">This is sentence 1 of the live middle text, written long enough to count as real prose for the reader. This is sentence 2 of the live middle text, written long enough to count as real prose for the reader. This is sentence 3 of the live middle text, written long enough to count as real prose for the reader. This is sentence 4 of the live middle text, written long enough to count as real prose for the reader.</p><p id="t3">This is sentence 1 of the live ending text, written long enough to count as real prose for the reader. This is sentence 2 of the live ending text, written long enough to count as real prose for the reader. This is sentence 3 of the live ending text, written long enough to count as real prose for the reader. <a href="#t1">Back to the start</a></p></article>
+<script>let n = 0; setInterval(() => (document.getElementById('clock').textContent = String(++n)), 200);</script>
+</body></html>

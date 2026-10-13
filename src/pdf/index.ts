@@ -19,6 +19,8 @@ const MAX_WIDTH = 920;
 
 let blocks: Block[] = [];
 let lector: Booted | null = null;
+/** Counts the PDFs opened in this tab, so an earlier one still loading knows to give up. */
+let loads = 0;
 
 function setStatus(message: string, problem = false): void {
   statusEl.textContent = message;
@@ -27,8 +29,11 @@ function setStatus(message: string, problem = false): void {
 }
 
 async function load(data: ArrayBuffer, name: string): Promise<void> {
+  const current = ++loads;
+  lector?.stop();
   pagesEl.replaceChildren();
   blocks = [];
+  lector?.refresh();
   document.title = `${name} · Lector`;
   titleEl.textContent = name;
   $('#drop').hidden = true;
@@ -59,6 +64,7 @@ async function load(data: ArrayBuffer, name: string): Promise<void> {
   const paint = async (el: HTMLElement) => paintJobs.get(el)?.();
 
   for (let number = 1; number <= pdf.numPages; number++) {
+    if (current !== loads) return;
     setStatus(`Reading page ${number} of ${pdf.numPages}`);
     const page = await pdf.getPage(number);
     const base = page.getViewport({ scale: 1 });
@@ -79,6 +85,7 @@ async function load(data: ArrayBuffer, name: string): Promise<void> {
     const content = await page.getTextContent();
     const textLayer = new pdfjs.TextLayer({ textContentSource: content, container: layer, viewport });
     await textLayer.render();
+    if (current !== loads) return pageEl.remove();
 
     // Pair each drawn fragment with its geometry. Items without `str` are structure markers.
     const items = content.items.filter((item): item is TextItem => 'str' in item);
@@ -106,6 +113,7 @@ async function load(data: ArrayBuffer, name: string): Promise<void> {
     if (number % 4 === 0) await new Promise((resolve) => setTimeout(resolve));
   }
 
+  if (current !== loads) return;
   const bodySize = [...sizes].sort((a, b) => a - b)[sizes.length >> 1] ?? 10;
   const running = findRunningLines(pageLines);
   const lastOfPage = new Set<Block>();
@@ -123,9 +131,16 @@ async function load(data: ArrayBuffer, name: string): Promise<void> {
 }
 
 async function openFromUrl(url: string): Promise<void> {
-  const name = decodeURIComponent(new URL(url).pathname.split('/').pop() || 'Document').replace(/\.pdf$/i, '');
   setStatus('Downloading…');
   try {
+    const last = new URL(url).pathname.split('/').pop() || 'Document';
+    let name = last;
+    try {
+      name = decodeURIComponent(last);
+    } catch {
+      /* an address with a stray % in it; show it as it is */
+    }
+    name = name.replace(/\.pdf$/i, '');
     const response = await fetch(url, { credentials: 'include' });
     if (!response.ok) throw new Error(String(response.status));
     await load(await response.arrayBuffer(), name);

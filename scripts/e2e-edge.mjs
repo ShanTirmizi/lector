@@ -210,6 +210,40 @@ export async function runEdge({ context, worker, command, check, waitFor, sleep,
   check('reloading while reading clears the page', (await a.read('lector-sentence')) === null && !(await a.ui('.player').isVisible()));
   await page.close();
 
+  // A page that never stops changing, in-page links, pausing early, and the last sentence.
+  const live = await context.newPage();
+  await live.goto(`${base}/ticker.html`);
+  await live.bringToFront();
+  const c = on(live);
+  await c.ui('.launcher').waitFor({ state: 'visible', timeout: 4_000 }).catch(() => {});
+  check('the launcher appears on a page that keeps changing', await c.ui('.launcher').isVisible());
+  await live.locator('#t2').hover();
+  await c.ui('.spot.on').waitFor({ state: 'visible', timeout: 4_000 }).catch(() => {});
+  check('paragraph buttons work on a page that keeps changing', (await c.ui('.spot.on').count()) === 1);
+  await command({ type: 'toggle' });
+  await playing(c);
+  await live.evaluate(() => (location.hash = '#t1'));
+  await sleep(6_000);
+  check('following a link within the page does not stop the reading', (await c.label()) === 'Pause' && (await c.ui('.player').isVisible()));
+  // Pause just after a sentence starts, wait, then go back: the wait must not count as listening time.
+  const earlier = await c.read('lector-sentence');
+  await c.ui('button[aria-label="Next sentence"]').click();
+  await waitFor(async () => (await c.read('lector-sentence')) !== earlier && (await c.read('lector-word')), 15_000, 'the next sentence to start');
+  await c.ui('.play').click();
+  await waitFor(async () => (await c.label()) === 'Play', 3_000, 'pause');
+  await sleep(2_500);
+  await c.ui('button[aria-label="Previous sentence"]').click();
+  await sleep(1_000);
+  check('"previous" after a long pause goes back a sentence', (await c.read('lector-sentence')) === earlier, (await c.read('lector-sentence'))?.slice(0, 40));
+  const line2 = await c.ui('.scrub').boundingBox();
+  await live.mouse.click(line2.x + line2.width - 2, line2.y + line2.height - 6);
+  await sleep(1_500);
+  const lastSentence = await c.read('lector-sentence');
+  await live.keyboard.press('Alt+Period');
+  await sleep(1_000);
+  check('"next" on the last sentence stays put', (await c.read('lector-sentence')) === lastSentence && (await c.status()) !== 'Finished', lastSentence?.slice(0, 40));
+  await live.close();
+
   // Pages with nothing to read, and text Lector cannot speak.
   const empty = await context.newPage();
   await empty.goto(`${base}/empty.html`);

@@ -2,6 +2,8 @@
 // and the offscreen document that owns the voice engine and the audio.
 
 export const ENGINE_PORT = 'lector-engine';
+/** A connection that can only ask for voice samples. */
+export const SAMPLE_PORT = 'lector-sample';
 
 /** One piece of text to speak, normally a sentence. */
 export interface ChunkSpec {

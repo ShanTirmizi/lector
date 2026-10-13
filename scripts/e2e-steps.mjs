@@ -19,6 +19,16 @@ export async function run({ page, context, worker, command, check, waitFor, slee
   await sleep(350);
   await shot('01-launcher');
 
+  // Pausing before the voice has even loaded must answer straight away, and play must still work after.
+  await command({ type: 'toggle' });
+  await ui('.player').waitFor({ state: 'visible' });
+  await ui('.play').click();
+  await waitFor(async () => (await ui('.play').getAttribute('aria-label')) === 'Play', 2_000, 'an early pause to register');
+  await sleep(1_500);
+  check('pausing while the voice loads answers at once and stays paused', (await ui('.play').getAttribute('aria-label')) === 'Play' && (await highlighted('lector-word')) === null);
+  await ui('button[aria-label="Close the player"]').click();
+  await sleep(300);
+
   // Read the whole article.
   const started = Date.now();
   await command({ type: 'toggle' });

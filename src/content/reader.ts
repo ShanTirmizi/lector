@@ -193,7 +193,8 @@ export class Reader {
   }
 
   next(): void {
-    this.seek(this.index + 1);
+    // On the last sentence there is nowhere to go; do not start it over.
+    if (this.reading && this.index < this.reading.units.length - 1) this.seek(this.index + 1);
   }
 
   /** The unit at a point 0–1 through the text, with what would be left to hear from there. */
@@ -240,6 +241,7 @@ export class Reader {
   stop(): void {
     this.engine.sendIfConnected({ type: 'stop' });
     this.engine.disconnect();
+    // A connection that was still opening is abandoned by disconnect(); nothing will arrive from it.
     this.reading = null;
     this.state = 'idle';
     this.detached = true;
@@ -294,7 +296,11 @@ export class Reader {
         if (message.state === 'idle') return;
         if (moved) this.showSentence(true);
         if (message.state === 'playing') this.startFrames();
-        else this.stopFrames();
+        else {
+          this.stopFrames();
+          // Freeze the local clock where it is; it only runs while sound is playing.
+          this.clock = { ...this.clock, t: this.currentTime(), playing: false, at: Date.now() };
+        }
         if (message.state === 'ended') this.highlighter.clear();
         break;
       }

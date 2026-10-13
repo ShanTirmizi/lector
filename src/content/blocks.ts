@@ -201,7 +201,16 @@ class Extractor {
         return;
       }
       if (this.skipped(element)) return;
+      // An "inline" tag can be laid out as a box of its own (a styled <span> per line or per word).
+      // Its text must not run into its neighbours. Only checked where words would otherwise touch.
+      const boxed = () => {
+        const display = getComputedStyle(element).display;
+        return !display.startsWith('inline') && display !== 'contents' && display !== 'ruby';
+      };
+      if (text.length > 0 && !pendingSpace && element.firstChild && boxed()) pendingSpace = true;
+      const before = text.length;
       for (const child of Array.from(element.childNodes)) visit(child);
+      if (text.length > before && !pendingSpace && element.nextSibling && boxed()) pendingSpace = true;
     };
     for (const node of run) visit(node);
 

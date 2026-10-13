@@ -2,7 +2,7 @@
 // A page connects with a port, hands over the sentences to read, and receives
 // playback state, word timings and a running clock in return.
 
-import { ENGINE_PORT, type ChunkSpec, type FromEngine, type PlayState, type ToEngine, type WordMark } from '../shared/protocol';
+import { ENGINE_PORT, SAMPLE_PORT, type ChunkSpec, type FromEngine, type PlayState, type ToEngine, type WordMark } from '../shared/protocol';
 import { voiceById } from '../shared/voices';
 import { encodeWav } from './wav';
 import type { WorkerRequest, WorkerResponse } from './worker';
@@ -21,13 +21,37 @@ const CLOCK_INTERVAL_MS = 120;
 
 // ---------------------------------------------------------------- synthesis
 
+/** Thrown for a request that was dropped because the listener moved elsewhere. */
+class Cancelled extends Error {}
+
+interface Job {
+  key: string;
+  voice: string;
+  chunk: ChunkSpec;
+  /** A voice sample; not tied to a place in the text, so a jump does not cancel it. */
+  sample: boolean;
+  resolve: (clip: Clip) => void;
+  reject: (error: Error) => void;
+}
+
 const worker = new Worker(new URL('./engine-worker.js', location.href), { type: 'module' });
-const pending = new Map<number, { resolve: (clip: Clip) => void; reject: (error: Error) => void; pauseAfter: number }>();
 const clips = new Map<string, Clip>();
-let nextRequestId = 1;
+/** Requests that have been asked for and not finished, so the same text is never spoken twice. */
+const inFlight = new Map<string, Promise<Clip>>();
+/** Requests waiting for the worker, most urgent first. The worker does one at a time. */
+const waiting: Job[] = [];
+let running: Job | null = null;
 let lastModelMessage: FromEngine | null = null;
 
 const clipKey = (voice: string, chunk: ChunkSpec) => `${voice}|${chunk.pauseAfter ?? 0}|${chunk.text}`;
+
+function pump(): void {
+  if (running) return;
+  const job = waiting.shift();
+  if (!job) return;
+  running = job;
+  worker.postMessage({ type: 'synth', id: 0, text: job.chunk.text, voice: job.voice } satisfies WorkerRequest);
+}
 
 worker.onmessage = (event: MessageEvent<WorkerResponse>) => {
   const message = event.data;
@@ -36,19 +60,35 @@ worker.onmessage = (event: MessageEvent<WorkerResponse>) => {
     session?.send(message);
     return;
   }
-  const request = pending.get(message.id);
-  if (!request) return;
-  pending.delete(message.id);
-  if (message.type === 'error') return request.reject(new Error(message.message));
-  const blob = encodeWav(message.pcm, message.sampleRate, request.pauseAfter);
-  request.resolve({
-    url: URL.createObjectURL(blob),
-    duration: message.pcm.length / message.sampleRate + request.pauseAfter,
-    words: message.words,
-  });
+  const job = running;
+  running = null;
+  if (job) {
+    if (message.type === 'error') job.reject(new Error(message.message));
+    else {
+      const pauseAfter = job.chunk.pauseAfter ?? 0;
+      job.resolve({
+        url: URL.createObjectURL(encodeWav(message.pcm, message.sampleRate, pauseAfter)),
+        duration: message.pcm.length / message.sampleRate + pauseAfter,
+        words: message.words,
+      });
+    }
+  }
+  pump();
 };
 
-function synthesize(voice: string, chunk: ChunkSpec): Promise<Clip> {
+worker.onerror = () => {
+  // The worker itself failed (out of memory, a crashed GPU process). Fail what was running and carry on.
+  const job = running;
+  running = null;
+  job?.reject(new Error('The voice engine stopped unexpectedly. Press play to try again.'));
+  pump();
+};
+
+/**
+ * Speech for a chunk. `urgent` puts it ahead of everything that is waiting,
+ * for the sentence the listener is about to hear.
+ */
+function synthesize(voice: string, chunk: ChunkSpec, urgent: boolean, sample = false): Promise<Clip> {
   const key = clipKey(voice, chunk);
   const cached = clips.get(key);
   if (cached) {
@@ -57,20 +97,75 @@ function synthesize(voice: string, chunk: ChunkSpec): Promise<Clip> {
     clips.set(key, cached);
     return Promise.resolve(cached);
   }
-  return new Promise<Clip>((resolve, reject) => {
-    const id = nextRequestId++;
-    pending.set(id, { resolve, reject, pauseAfter: chunk.pauseAfter ?? 0 });
-    worker.postMessage({ type: 'synth', id, text: chunk.text, voice } satisfies WorkerRequest);
-  }).then((clip) => {
-    clips.set(key, clip);
-    for (const [oldKey, old] of clips) {
-      if (clips.size <= CACHE_LIMIT) break;
-      if (old.url === session?.playingUrl) continue;
-      URL.revokeObjectURL(old.url);
-      clips.delete(oldKey);
-    }
-    return clip;
-  });
+  const existing = inFlight.get(key);
+  if (existing) {
+    const at = waiting.findIndex((job) => job.key === key);
+    if (urgent && at > 0) waiting.unshift(...waiting.splice(at, 1));
+    return existing;
+  }
+  const promise = new Promise<Clip>((resolve, reject) => {
+    const job: Job = { key, voice, chunk, sample, resolve, reject };
+    if (urgent) waiting.unshift(job);
+    else waiting.push(job);
+  })
+    .then((clip) => {
+      clips.set(key, clip);
+      for (const [oldKey, old] of clips) {
+        if (clips.size <= CACHE_LIMIT) break;
+        if (old.url === session?.playingUrl) continue;
+        URL.revokeObjectURL(old.url);
+        clips.delete(oldKey);
+      }
+      return clip;
+    })
+    .finally(() => inFlight.delete(key));
+  inFlight.set(key, promise);
+  pump();
+  return promise;
+}
+
+/** Drops every request for the text that has not started yet. Called when the listener jumps. */
+function cancelWaiting(): void {
+  for (let i = waiting.length - 1; i >= 0; i--) {
+    if (waiting[i].sample) continue;
+    const [job] = waiting.splice(i, 1);
+    job.reject(new Cancelled());
+  }
+}
+
+// ------------------------------------------------------------------ samples
+
+// A voice sample plays on its own audio element. While it plays, the reading waits.
+let sampleAudio: HTMLAudioElement | null = null;
+let sampleToken = 0;
+
+function stopSample(): void {
+  sampleToken++;
+  sampleAudio?.pause();
+  sampleAudio = null;
+}
+
+async function playSample(voice: string): Promise<void> {
+  stopSample();
+  const token = sampleToken;
+  session?.hold();
+  const finish = () => {
+    if (token !== sampleToken) return;
+    sampleAudio = null;
+    session?.release();
+  };
+  try {
+    const clip = await synthesize(voice, { text: `Hi, I'm ${voiceById(voice).name}. This is how I sound when I read to you.` }, true, true);
+    if (token !== sampleToken) return;
+    const audio = new Audio(clip.url);
+    sampleAudio = audio;
+    audio.onended = finish;
+    audio.onerror = finish;
+    await audio.play();
+  } catch {
+    // A sample that fails is not worth interrupting the listener for.
+    finish();
+  }
 }
 
 // ----------------------------------------------------------------- playback
@@ -83,7 +178,9 @@ class Session {
   private wantPlaying = false;
   private state: PlayState = 'idle';
   private audio: HTMLAudioElement | null = null;
-  private preview: HTMLAudioElement | null = null;
+  /** True while a voice sample plays; `resumeAfterHold` is what the listener wanted before it. */
+  private held = false;
+  private resumeAfterHold = false;
   /** Bumped whenever the plan changes, so late results from an old plan are ignored. */
   private generation = 0;
   private synthesizing = false;
@@ -115,33 +212,66 @@ class Session {
     this.closed = true;
     this.generation++;
     this.dropAudio();
-    this.stopPreview();
+    if (this.held) stopSample();
     clearInterval(this.clock);
     if (session === this) session = null;
     if (displaced) this.port.disconnect();
   }
 
+  /** Pauses the reading for a voice sample, remembering whether it was playing. */
+  hold(): void {
+    if (this.held) return;
+    this.held = true;
+    this.resumeAfterHold = this.wantPlaying;
+    this.wantPlaying = false;
+    if (this.audio && !this.audio.paused) {
+      this.audio.pause();
+      this.setState('paused');
+      this.tick();
+    }
+  }
+
+  /** Called when the sample ends: carry on if the reading was playing before it. */
+  release(): void {
+    if (!this.held) return;
+    this.held = false;
+    if (!this.resumeAfterHold) return;
+    this.wantPlaying = true;
+    // If the sentence is not ready yet, it starts by itself once it is.
+    if (this.audio) void this.resume();
+  }
+
+  /** Any command from the listener ends a sample and puts their earlier intent back first. */
+  private endHold(): void {
+    if (!this.held) return;
+    this.held = false;
+    this.wantPlaying = this.resumeAfterHold;
+    stopSample();
+  }
+
   private handle(message: ToEngine): void {
+    if (message.type !== 'preview' && message.type !== 'rate') this.endHold();
     switch (message.type) {
       case 'load':
         this.chunks = message.chunks;
         this.voice = message.voice;
         this.rate = message.rate;
         this.wantPlaying = message.autoplay;
+        this.failed.clear();
         this.goTo(message.index);
         break;
       case 'play':
-        this.stopPreview();
         this.wantPlaying = true;
         if (this.state === 'ended') this.goTo(0);
         else if (this.audio) void this.resume();
         else this.goTo(this.index);
         break;
       case 'pause':
-        this.stopPreview();
         this.wantPlaying = false;
         this.audio?.pause();
-        if (this.audio) this.setState('paused');
+        // Also while the first sentence is still being prepared, so the button answers at once.
+        if (this.chunks.length > 0 && this.state !== 'ended') this.setState('paused');
+        this.tick();
         break;
       case 'seek':
         this.goTo(message.index);
@@ -158,11 +288,12 @@ class Session {
         }
         break;
       case 'preview':
-        void this.playPreview(message.voice);
+        void playSample(message.voice);
         break;
       case 'stop':
         this.wantPlaying = false;
         this.generation++;
+        cancelWaiting();
         this.dropAudio();
         this.setState('idle');
         break;
@@ -207,10 +338,13 @@ class Session {
 
   private goTo(index: number): void {
     this.generation++;
+    // Whatever was queued for the old position is no longer wanted.
+    cancelWaiting();
     this.dropAudio();
     this.index = Math.max(0, Math.min(index, this.chunks.length - 1));
     if (this.chunks.length === 0) return this.setState('ended');
-    this.setState(lastModelMessage?.type === 'model' && lastModelMessage.phase === 'ready' ? 'buffering' : 'loading');
+    if (this.wantPlaying) this.setState(lastModelMessage?.type === 'model' && lastModelMessage.phase === 'ready' ? 'buffering' : 'loading');
+    else this.setState('paused');
     void this.startCurrent();
     this.fillAhead();
   }
@@ -220,9 +354,9 @@ class Session {
     const index = this.index;
     let clip: Clip;
     try {
-      clip = await synthesize(this.voice, this.chunks[index]);
+      clip = await synthesize(this.voice, this.chunks[index], true);
     } catch (error) {
-      if (generation === this.generation) this.setState('error', (error as Error).message);
+      if (generation === this.generation && !(error instanceof Cancelled)) this.setState('error', (error as Error).message);
       return;
     }
     if (generation !== this.generation) return;
@@ -258,7 +392,8 @@ class Session {
     try {
       await audio.play();
     } catch (error) {
-      if (audio !== this.audio) return;
+      // A pause that lands while play() is still starting rejects it; that is not a failure.
+      if (audio !== this.audio || (error as DOMException).name === 'AbortError') return;
       return this.setState('error', (error as Error).message);
     }
     if (audio !== this.audio) return;
@@ -277,6 +412,7 @@ class Session {
     this.index++;
     if (!clips.has(clipKey(this.voice, this.chunks[this.index]))) this.setState('buffering');
     void this.startCurrent();
+    this.fillAhead();
   }
 
   /** Prepares the next few chunks so that playback never waits. */
@@ -293,41 +429,16 @@ class Session {
       const key = clipKey(this.voice, this.chunks[i]);
       if (this.failed.has(key)) continue;
       this.synthesizing = true;
-      synthesize(this.voice, this.chunks[i])
-        .catch(() => void this.failed.add(key))
+      synthesize(this.voice, this.chunks[i], false)
+        .catch((error) => {
+          if (!(error instanceof Cancelled)) this.failed.add(key);
+        })
         .finally(() => {
           this.synthesizing = false;
           // Start again from wherever the listener is now.
           this.fillAhead();
         });
       return;
-    }
-  }
-
-  private stopPreview(): void {
-    this.preview?.pause();
-    this.preview = null;
-  }
-
-  private async playPreview(voice: string): Promise<void> {
-    this.stopPreview();
-    const wasPlaying = this.wantPlaying && !!this.audio;
-    this.audio?.pause();
-    if (wasPlaying) this.setState('paused');
-    const name = voiceById(voice).name;
-    try {
-      const clip = await synthesize(voice, { text: `Hi, I'm ${name}. This is how I sound when I read to you.` });
-      if (this.closed) return;
-      const preview = new Audio(clip.url);
-      this.preview = preview;
-      preview.onended = () => {
-        if (this.preview !== preview) return;
-        this.preview = null;
-        if (wasPlaying && this.wantPlaying) void this.resume();
-      };
-      await preview.play();
-    } catch {
-      /* a preview that fails is not worth interrupting the listener for */
     }
   }
 }
@@ -342,6 +453,13 @@ if ('mediaSession' in navigator) {
 }
 
 chrome.runtime.onConnect.addListener((port) => {
+  // The settings page only wants to hear a voice; it must not take the reading away from a tab.
+  if (port.name === SAMPLE_PORT) {
+    port.onMessage.addListener((message: ToEngine) => {
+      if (message.type === 'preview') void playSample(message.voice);
+    });
+    return;
+  }
   if (port.name !== ENGINE_PORT) return;
   // One voice at a time: a new reader takes over from the previous one.
   session?.close(true);

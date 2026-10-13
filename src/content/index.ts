@@ -34,8 +34,17 @@ async function handOff(open: () => Promise<void>): Promise<void> {
   };
   const launcher = new Launcher(root, () => void run());
   if (settings.launcher && !settings.disabledSites.includes(location.hostname)) launcher.show(0);
+  let retired = false;
+  document.addEventListener(
+    RETIRE,
+    () => {
+      retired = true;
+      host.remove();
+    },
+    { once: true },
+  );
   chrome.runtime.onMessage.addListener((message: ToContent) => {
-    if (message.type === 'toggle') void run();
+    if (!retired && message.type === 'toggle') void run();
   });
 }
 
@@ -48,7 +57,9 @@ document.dispatchEvent(new CustomEvent(RETIRE));
 // so what they left behind is hidden in place instead.
 for (const old of Array.from(document.querySelectorAll<HTMLElement>(HOST_TAG))) old.style.setProperty('display', 'none', 'important');
 
-const googleDoc = location.hostname === 'docs.google.com' ? location.pathname.match(/^\/document\/(?:u\/\d+\/)?d\/([^/]+)/) : null;
+// A document open in the Google Docs editor or viewer. Published documents
+// (/document/d/e/…/pub) are ordinary web pages and are read in place.
+const googleDoc = location.hostname === 'docs.google.com' ? location.pathname.match(/^\/document\/(?:u\/\d+\/)?d\/(?!e\/)[^/]{20,}/) : null;
 
 // Chrome shows a PDF as a bare page holding a single embedded viewer.
 const pdfViewer = document.contentType === 'application/pdf' || (document.body?.childElementCount === 1 && document.body.firstElementChild?.matches('embed[type="application/pdf"]'));
@@ -58,13 +69,15 @@ if (pdfViewer) {
 } else if (googleDoc) {
   void handOff(async () => {
     // The document's own export, fetched as the signed-in reader. Nothing leaves the browser.
-    const response = await fetch(`/document/d/${googleDoc[1]}/export?format=html`, { credentials: 'include' });
+    // The matched path keeps the /u/1/ part, so the right signed-in account is used.
+    const response = await fetch(`${googleDoc[0]}/export?format=html`, { credentials: 'include' });
     if (!response.ok) throw new Error('Lector could not open this document. You may not have permission to download it.');
     const title = document.title.replace(/ - Google Docs$/, '');
     // Only the text is needed. Dropping pictures and styling here keeps the hand-over small.
     const exported = new DOMParser().parseFromString(await response.text(), 'text/html');
     exported.querySelectorAll('img, style, script, link, meta').forEach((node) => node.remove());
-    await send({ type: 'open-document', title, html: exported.body.innerHTML, source: location.href });
+    const reply = await send({ type: 'open-document', title, html: exported.body.innerHTML, source: location.href });
+    if (!reply?.ok) throw new Error('Lector could not open this document. It may be too large.');
   });
 } else {
   void boot();

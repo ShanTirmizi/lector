@@ -1,6 +1,7 @@
 // The settings page. Every control writes straight to storage; open pages pick the change up from there.
 
 import { EngineClient } from '../content/engine-client';
+import { SAMPLE_PORT } from '../shared/protocol';
 import { clampRate, loadSettings, onSettingsChanged, saveSettings, type HighlightColor, type Settings } from '../shared/settings';
 import { VOICES } from '../shared/voices';
 
@@ -13,9 +14,11 @@ const COLORS: Array<[HighlightColor, string, string]> = [
 ];
 
 let settings: Settings;
+// A samples-only connection: hearing a voice here must not interrupt a tab that is reading.
 const engine = new EngineClient(
   () => undefined,
   () => undefined,
+  SAMPLE_PORT,
 );
 
 function render(): void {
