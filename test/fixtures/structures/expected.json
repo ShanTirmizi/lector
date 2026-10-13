@@ -1,0 +1,38 @@
+{
+  "comments.html": {
+    "about": "an essay with a far longer comment section under it",
+    "first": "A short essay",
+    "has": ["essay opening", "essay ending"],
+    "lacks": ["Great post", "412 Comments"]
+  },
+  "forum.html": {
+    "about": "a thread where the replies are the content",
+    "has": ["Reply 0:", "Reply 7:"],
+    "lacks": ["home | new"]
+  },
+  "wiki.html": {
+    "about": "inline headings, a citation marker and reference sections",
+    "first": "Sleeping car",
+    "headings": ["History"],
+    "has": ["encyclopedia lead", "history section"],
+    "lacks": ["[1]", "[edit]", "Smith, John", "Couchette car", "See also", "References", "External links", "A site about trains"]
+  },
+  "standfirst.html": {
+    "about": "headline and standfirst outside the body, promo boxes inside it",
+    "first": "Night trains return",
+    "has": ["After decades of decline", "news opening", "news ending"],
+    "lacks": ["Read More", "Ten cities", "How to pack light", "By A. Writer", "The Daily Example"]
+  },
+  "sections.html": {
+    "about": "a document cut into many nested sections",
+    "first": "A Sectioned Document",
+    "headings": ["1. Section 1", "8. Section 8"],
+    "has": ["section 1 first", "section 4 second", "section 8 second"]
+  },
+  "sitename.html": {
+    "about": "the site's name in an h1 above an article with its own title",
+    "first": "Things we learned this year",
+    "has": ["blog opening", "blog ending"],
+    "lacks": ["Sam's Weblog"]
+  }
+}

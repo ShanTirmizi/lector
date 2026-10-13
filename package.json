@@ -9,7 +9,8 @@
     "build": "node scripts/build.mjs",
     "watch": "node scripts/build.mjs --watch",
     "typecheck": "tsc --noEmit",
-    "test": "node scripts/e2e.mjs"
+    "test": "node scripts/extract.mjs --test && node scripts/e2e.mjs",
+    "extract": "node scripts/extract.mjs"
   },
   "dependencies": {
     "@huggingface/transformers": "^3.8.1",

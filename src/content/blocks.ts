@@ -40,8 +40,10 @@ const INLINE_TAGS = new Set([
 ]);
 const BLOCK_SELECTOR = 'p,div,li,ul,ol,dl,dt,dd,h1,h2,h3,h4,h5,h6,blockquote,table,tr,td,th,section,article,pre,figure,figcaption,header,main,hr,details,summary';
 // Class and id fragments that mark page furniture rather than content.
-const FURNITURE = /(^|[-_ ])(comments?|share|sharing|social|related|recirc\w*|promo\w*|advert\w*|ads?|sponsor\w*|newsletter|subscribe|paywall|cookie|consent|breadcrumbs?|sidebar|toolbar|menu|pagination|pager|popup|modal|outbrain|taboola|toc|navbox|mw-editsection|mw-jump-link|noprint|hatnote|ambox|baseline-indicator|mbox|metadata|reflist|references|footnotes|infobox|catlinks|visually-hidden|sr-only|screen-reader-text)([-_ ]|$)/i;
+const FURNITURE = /(^|[-_ ])(comments?|share|sharing|social|related|recirc\w*|promo\w*|advert\w*|ads?|sponsor\w*|newsletter|subscribe|paywall|cookie|consent|breadcrumbs?|sidebar|toolbar|menu|pagination|pager|popup|modal|outbrain|taboola|toc|navbox|mw-editsection|editsection|mw-jump-link|noprint|hatnote|ambox|baseline-indicator|mbox|metadata|reflist|references|footnotes|infobox|catlinks|visually-hidden|sr-only|screen-reader-text)([-_ ]|$)/i;
 const CAPTION = /(^|[-_ ])(caption|thumbcaption|gallerytext|wp-caption-text|credit)([-_ ]|$)/i;
+// Bylines and datelines: worth a glance on the page, tiresome to hear.
+const METADATA = /(^|[-_ ])(byline|bylines|author|authors|dateline|date|datetime|timestamp|published|updated|posted|posted-on|post-meta|entry-meta|article-meta|meta|reading-time|read-time)([-_ ]|$)/i;
 // Reader comments can be many times longer than the article they sit under.
 const DISCUSSION = /(^|[-_ ])(comments?|disqus\w*|respond|replies|pingbacks?|trackbacks?|discussion)([-_ ]|$)/i;
 // Sections that are lists of sources rather than prose.
@@ -110,6 +112,7 @@ class Extractor {
       // Otherwise a large element is never furniture, whatever it is called.
       if (label.length > 1 && FURNITURE.test(label) && (el.textContent ?? '').length < this.rootTextLength * 0.4) return true;
       if (this.options.skipCaptions && label.length > 1 && CAPTION.test(label) && (el.textContent ?? '').length < 600) return true;
+      if (label.length > 1 && METADATA.test(label) && (el.textContent ?? '').trim().length < 120) return true;
     }
     return isHidden(el);
   }
