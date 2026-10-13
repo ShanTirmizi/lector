@@ -107,11 +107,18 @@ export class Toast {
 
   constructor(private root: ShadowRoot) {}
 
-  show(message: string): void {
+  /** @param action  an optional button shown after the message */
+  show(message: string, action?: { label: string; run: () => void }): void {
     this.el?.remove();
     clearTimeout(this.timer);
-    this.el = h('div', { class: 'toast', role: 'status' }, message);
-    this.root.append(this.el);
-    this.timer = window.setTimeout(() => this.el?.remove(), 4200);
+    const el = h('div', { class: 'toast', role: 'status' }, h('span', {}, message));
+    if (action) {
+      el.append(
+        h('button', { type: 'button', onClick: () => { el.remove(); action.run(); } }, action.label),
+      );
+    }
+    this.el = el;
+    this.root.append(el);
+    this.timer = window.setTimeout(() => el.remove(), action ? 7000 : 4200);
   }
 }

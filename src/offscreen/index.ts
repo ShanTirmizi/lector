@@ -138,6 +138,7 @@ class Session {
         else this.goTo(this.index);
         break;
       case 'pause':
+        this.stopPreview();
         this.wantPlaying = false;
         this.audio?.pause();
         if (this.audio) this.setState('paused');
@@ -191,10 +192,17 @@ class Session {
     if (!this.audio) return;
     this.audio.onended = null;
     this.audio.onerror = null;
+    this.audio.onpause = null;
+    this.audio.onplay = null;
     this.audio.pause();
     this.audio.removeAttribute('src');
     this.audio = null;
     this.playingUrl = '';
+  }
+
+  /** Moves by whole chunks, for the media keys. */
+  step(delta: number): void {
+    if (this.chunks.length > 0) this.goTo(this.index + delta);
   }
 
   private goTo(index: number): void {
@@ -224,6 +232,18 @@ class Session {
     audio.playbackRate = this.rate;
     audio.onended = () => this.advance();
     audio.onerror = () => this.setState('error', 'The audio could not be played.');
+    // Media keys and the browser's own media controls act on the element directly.
+    audio.onpause = () => {
+      if (audio !== this.audio || audio.ended || !this.wantPlaying || this.state !== 'playing') return;
+      this.wantPlaying = false;
+      this.setState('paused');
+    };
+    audio.onplay = () => {
+      if (audio !== this.audio || this.wantPlaying) return;
+      this.wantPlaying = true;
+      this.setState('playing');
+      this.tick();
+    };
     this.audio = audio;
     this.playingUrl = clip.url;
     this.send({ type: 'chunk', index, duration: clip.duration, words: clip.words });
@@ -313,6 +333,13 @@ class Session {
 }
 
 let session: Session | null = null;
+
+// Hardware media keys: play, pause, and skip by sentence.
+if ('mediaSession' in navigator) {
+  navigator.mediaSession.metadata = new MediaMetadata({ title: 'Reading aloud', artist: 'Lector' });
+  navigator.mediaSession.setActionHandler('nexttrack', () => session?.step(1));
+  navigator.mediaSession.setActionHandler('previoustrack', () => session?.step(-1));
+}
 
 chrome.runtime.onConnect.addListener((port) => {
   if (port.name !== ENGINE_PORT) return;

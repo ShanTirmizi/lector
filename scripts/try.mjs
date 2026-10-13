@@ -1,5 +1,6 @@
 // Tries the built extension on a real page and reports what it read.
 // Usage: node scripts/try.mjs <url> [seconds] [--headed]
+// Put "pdf:" in front of a PDF's address to open it in Lector's PDF view.
 import { chromium } from 'playwright-core';
 import { readdir } from 'node:fs/promises';
 import os from 'node:os';
@@ -28,9 +29,11 @@ try {
   const worker = context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker'));
   await worker.evaluate(() => chrome.storage.local.clear());
   const page = await context.newPage();
-  await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60_000 });
+  const target = url.startsWith('pdf:') ? `${worker.url().split('/').slice(0, 3).join('/')}/pdf.html?file=${encodeURIComponent(url.slice(4))}` : url;
+  await page.goto(target, { waitUntil: 'domcontentloaded', timeout: 60_000 });
   await page.bringToFront();
   await sleep(2500);
+  if (url.startsWith('pdf:')) await page.locator('lector-ui .launcher').waitFor({ state: 'visible', timeout: 90_000 }).catch(() => console.log('page status:', page.locator('#status').innerText()));
   const ui = (selector) => page.locator(`lector-ui ${selector}`);
   const read = (name) =>
     page.evaluate((n) => {
@@ -64,7 +67,7 @@ try {
   console.log(`first word after ${(firstWord / 1000).toFixed(1)}s; waiting ${samples ? Math.round((busy / samples) * 100) : 0}% of the time after that; ${words.size} words highlighted`);
   console.log('status:', await ui('.status').innerText().catch(() => '(no player)'));
   sentences.forEach((sentence, i) => console.log(`${String(i + 1).padStart(2)}. ${sentence.slice(0, 160)}`));
-  const name = new URL(url).hostname.replace(/[^a-z0-9]+/gi, '-');
+  const name = new URL(url.replace(/^pdf:/, '')).hostname.replace(/[^a-z0-9]+/gi, '-') + (url.startsWith('pdf:') ? '-pdf' : '');
   await page.screenshot({ path: path.join(root, 'test/shots', `try-${name}.png`) });
 } finally {
   await context.close();

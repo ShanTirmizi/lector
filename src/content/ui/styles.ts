@@ -381,15 +381,20 @@ input[type="range"]::-webkit-slider-thumb {
   position: fixed;
   left: 50%;
   bottom: 96px;
-  transform: translateX(-50%);
-  max-width: min(420px, calc(100vw - 32px));
+  translate: -50% 0;
+  max-width: min(460px, calc(100vw - 32px));
   padding: 11px 16px;
   border-radius: 14px;
   background: var(--green-deep);
   border: 1px solid rgba(255, 255, 255, 0.12);
   box-shadow: 0 10px 26px rgba(9, 28, 23, 0.36);
   animation: rise 160ms ease-out;
+  display: flex;
+  align-items: center;
+  gap: 14px;
 }
+.toast button { flex: none; height: 30px; padding: 0 12px; border-radius: 15px; background: rgba(255, 216, 77, 0.16); color: var(--marker); font-weight: 600; white-space: nowrap; }
+.toast button:hover { background: rgba(255, 216, 77, 0.26); }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 1ms !important; transition-duration: 1ms !important; }

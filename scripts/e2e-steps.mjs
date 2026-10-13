@@ -126,6 +126,19 @@ export async function run({ page, context, worker, command, check, waitFor, slee
   await sleep(300);
   check('closing clears the page', (await highlighted('lector-sentence')) === null && (await ui('.player').isHidden()));
 
+  // Carrying on where the listener stopped.
+  await page.reload();
+  await ui('.launcher').waitFor({ state: 'visible', timeout: 10_000 });
+  await command({ type: 'toggle' });
+  await ui('.toast').waitFor({ state: 'visible', timeout: 15_000 });
+  await shot('08b-carry-on');
+  const resumed = await highlighted('lector-sentence');
+  check('a later visit carries on where it stopped', resumed !== 'The Quiet Return of the Night Train', resumed);
+  await ui('.toast button').click();
+  await waitFor(async () => (await highlighted('lector-sentence')) === 'The Quiet Return of the Night Train', 15_000, 'start from the top');
+  check('"Start from the top" goes back to the beginning', true);
+  await ui('button[aria-label="Close the player"]').click();
+
   // ---------------------------------------------------------------- settings
   const options = await context.newPage();
   await options.goto(`${extension}/options.html`);

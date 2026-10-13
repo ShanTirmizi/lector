@@ -93,7 +93,9 @@ export function toBlocks(page: PageLines, skip: Set<Line>, bodySize: number): Bl
       const sizeChanged = Math.abs(line.size - previous.size) > Math.max(line.size, previous.size) * 0.12;
       const movedUp = gap < -line.size * 0.5; // a new column, or a box placed elsewhere
       const wideGap = gap > leading * 1.35;
-      const indented = line.x - previous.x > line.size * 0.9 && line.x - paragraph[0].x > -line.size;
+      // A first-line indent starts a paragraph. Centred text also starts further right, but shares a midpoint.
+      const centred = Math.abs((line.x + line.right) / 2 - (previous.x + previous.right) / 2) < line.size * 1.5;
+      const indented = !centred && line.x - previous.x > line.size * 0.9 && line.x - paragraph[0].x > -line.size;
       const previousShort = previous.right < columnRight - line.size * 3 && /[.!?:]["”’)]?$/.test(previous.text);
       breaks = sizeChanged || movedUp || wideGap || indented || previousShort;
     }

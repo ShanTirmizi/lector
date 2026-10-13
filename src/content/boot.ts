@@ -58,7 +58,8 @@ export async function boot(options: BootOptions = {}): Promise<Booted | null> {
     unsaved = { ...unsaved, ...patch };
     clearTimeout(saveTimer);
     saveTimer = window.setTimeout(() => {
-      void saveSettings(unsaved);
+      // Fails only if the extension was reloaded under this page; the change still applies here.
+      saveSettings(unsaved).catch(() => undefined);
       unsaved = {};
     }, 250);
   };
@@ -77,13 +78,50 @@ export async function boot(options: BootOptions = {}): Promise<Booted | null> {
 
   const toast = new Toast(root);
 
-  function startPage(blockIndex = 0): void {
+  // Where the listener stopped on each page, so a long read can be picked up later.
+  const placeKey = () => location.origin + location.pathname + (location.protocol === 'chrome-extension:' ? location.search : '');
+  type Places = Record<string, { index: number; total: number; at: number }>;
+  let placeTimer = 0;
+  let pendingPlace: (() => Promise<void>) | null = null;
+  const flushPlace = () => {
+    clearTimeout(placeTimer);
+    const write = pendingPlace;
+    pendingPlace = null;
+    // Fails only if the extension was reloaded under this page.
+    write?.().catch(() => undefined);
+  };
+  const rememberPlace = (index: number, total: number, finished: boolean) => {
+    pendingPlace = async () => {
+      const places = ((await chrome.storage.local.get('places')).places ?? {}) as Places;
+      if (finished || index < 3) delete places[placeKey()];
+      else places[placeKey()] = { index, total, at: Date.now() };
+      const newest = Object.entries(places).sort((a, b) => b[1].at - a[1].at).slice(0, 150);
+      await chrome.storage.local.set({ places: Object.fromEntries(newest) });
+    };
+    clearTimeout(placeTimer);
+    placeTimer = window.setTimeout(flushPlace, 1200);
+  };
+  // Leaving the page or closing the player should not lose the last few seconds of progress.
+  window.addEventListener('pagehide', flushPlace);
+
+  /** Reads the page. With no paragraph given, carries on from where the listener last stopped. */
+  function startPage(blockIndex?: number): void {
     const reading = getPage();
     if (reading.units.length === 0) {
       mount();
       return toast.show('Lector found no text to read on this page. Select some text and try again.');
     }
-    reader.startAtBlock(reading, blockIndex);
+    if (blockIndex !== undefined) return reader.startAtBlock(reading, blockIndex);
+    chrome.storage.local
+      .get('places')
+      .then((stored) => ((stored.places ?? {}) as Places)[placeKey()])
+      .catch(() => undefined)
+      .then((place) => {
+        // Only when the page still has the same shape as last time.
+        const resume = place && place.total === reading.units.length && place.index < reading.units.length - 2;
+        reader.start(reading, resume ? place.index : 0);
+        if (resume) toast.show('Carrying on from where you stopped.', { label: 'Start from the top', run: () => reader.seek(0) });
+      });
   }
 
   function startSelection(): boolean {
@@ -152,13 +190,19 @@ export async function boot(options: BootOptions = {}): Promise<Booted | null> {
     launcher.show(estimateSeconds(reading.units) / settings.rate);
   }
 
+  let lastPlace = -1;
   reader.subscribe((snapshot) => {
     if (snapshot.active) {
       mount();
       launcher.hide();
       player.show();
       player.update(snapshot);
+      if (reader.currentReading === page && (snapshot.index !== lastPlace || snapshot.state === 'ended')) {
+        lastPlace = snapshot.index;
+        rememberPlace(snapshot.index, snapshot.total, snapshot.state === 'ended');
+      }
     } else {
+      flushPlace();
       player.hide();
       refreshLauncher();
     }
@@ -261,7 +305,7 @@ export async function boot(options: BootOptions = {}): Promise<Booted | null> {
         break;
       case 'read-from-here': {
         const index = blockAt(getPage(), contextTarget.node, contextTarget.y);
-        startPage(Math.max(index, 0));
+        startPage(index >= 0 ? index : undefined);
         break;
       }
       case 'stop':

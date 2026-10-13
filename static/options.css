@@ -61,6 +61,7 @@ button { cursor: pointer; }
   font-weight: 600;
 }
 .quiet:hover { border-color: var(--green-soft); }
+.note + .quiet { margin-top: 12px; }
 .link { padding: 0; border: 0; background: none; color: var(--green); text-decoration: underline; text-underline-offset: 3px; }
 :focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
 input[type="range"] { width: 220px; accent-color: var(--green); }

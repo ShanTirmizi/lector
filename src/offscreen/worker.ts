@@ -17,6 +17,8 @@ const post = (message: WorkerResponse, transfer: Transferable[] = []) => scope.p
 // Everything executable is loaded from the extension package, never from a CDN.
 env.backends.onnx.wasm!.wasmPaths = new URL('./ort/', scope.location.href).href;
 env.allowLocalModels = false;
+// Threads only help the WebAssembly fallback, and only exist when the page is cross-origin isolated.
+if (scope.crossOriginIsolated) env.backends.onnx.wasm!.numThreads = Math.max(1, Math.min(8, (navigator.hardwareConcurrency ?? 4) - 1));
 
 async function loadVoice(voice: string): Promise<Float32Array> {
   const response = await fetch(new URL(`./voices/${voice}.bin`, scope.location.href));
