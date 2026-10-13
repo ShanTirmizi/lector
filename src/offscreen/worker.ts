@@ -33,20 +33,30 @@ async function hasWebGpu(): Promise<boolean> {
   }
 }
 
+/** True when the model weights for this device are already in the browser cache. */
+async function isCached(target: Device): Promise<boolean> {
+  try {
+    const cache = await caches.open('transformers-cache');
+    const file = target === 'webgpu' ? '/onnx/model.onnx' : '/onnx/model_quantized.onnx';
+    return (await cache.keys()).some((request) => request.url.includes('Kokoro') && request.url.endsWith(file));
+  } catch {
+    return false;
+  }
+}
+
 let engine: Promise<Engine> | null = null;
 let device: Device = 'wasm';
 
-function start(preferred: Device): Promise<Engine> {
+async function start(preferred: Device): Promise<Engine> {
   device = preferred;
   post({ type: 'model', phase: 'load', device });
-  let downloading = false;
+  // Reading the model back from the cache also reports progress; only a real download is shown.
+  const downloading = !(await isCached(device));
   let lastPercent = -1;
   return Engine.create({
     device,
     loadVoice,
     onProgress: (fraction) => {
-      // Reading from the browser cache also reports progress, but finishes at once.
-      if (fraction < 1) downloading = true;
       const percent = Math.floor(fraction * 100);
       if (!downloading || percent === lastPercent) return;
       lastPercent = percent;

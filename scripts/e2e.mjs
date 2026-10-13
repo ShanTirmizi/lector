@@ -70,6 +70,9 @@ try {
       await chrome.tabs.sendMessage(tab.id, m);
     }, message);
 
+  // Start every run from default settings.
+  await worker.evaluate(() => chrome.storage.local.clear());
+
   const page = await context.newPage();
   const engineLog = [];
   page.on('console', (message) => {
