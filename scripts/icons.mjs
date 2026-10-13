@@ -1,14 +1,11 @@
 // Draws the extension icon at each size Chrome asks for. Run once; the PNGs are committed.
 import { chromium } from 'playwright-core';
-import { readdir } from 'node:fs/promises';
-import os from 'node:os';
+import { findChromium } from './browser.mjs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const cache = path.join(os.homedir(), 'Library/Caches/ms-playwright');
-const build = (await readdir(cache)).filter((name) => /^chromium-\d+$/.test(name)).sort().at(-1);
-const executablePath = process.env.CHROMIUM_PATH ?? path.join(cache, build, 'chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing');
+const executablePath = await findChromium();
 
 // A page of text with one line picked out in highlighter.
 const mark = `

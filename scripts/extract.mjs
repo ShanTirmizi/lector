@@ -4,15 +4,13 @@
 //        node scripts/extract.mjs --test      (checks the pages in test/fixtures/structures)
 import { build } from 'esbuild';
 import { chromium } from 'playwright-core';
-import { readdir, readFile } from 'node:fs/promises';
-import os from 'node:os';
+import { findChromium } from './browser.mjs';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const cache = path.join(os.homedir(), 'Library/Caches/ms-playwright');
-const chromiumBuild = (await readdir(cache)).filter((name) => /^chromium-\d+$/.test(name)).sort().at(-1);
-const executablePath = process.env.CHROMIUM_PATH ?? path.join(cache, chromiumBuild, 'chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing');
+const executablePath = await findChromium();
 
 // The extraction code, bundled so it can be run inside any page.
 const bundle = await build({

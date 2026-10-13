@@ -2,14 +2,9 @@
 // what it chose to read and how playback behaved. A quick way to spot pages
 // where extraction or styling goes wrong.
 // Usage: node scripts/qa.mjs [url ...]   (with no URLs, a built-in list is used)
-import { chromium } from 'playwright-core';
-import { readdir } from 'node:fs/promises';
-import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { launch, root, sleep } from './browser.mjs';
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const dist = path.join(root, 'dist');
 const DEFAULT = [
   'https://en.wikipedia.org/wiki/Sleeping_car',
   'https://paulgraham.com/hwh.html',
@@ -29,18 +24,8 @@ const urls = process.argv.slice(2).filter((a) => !a.startsWith('--'));
 const list = urls.length ? urls : DEFAULT;
 const seconds = Number(process.env.QA_SECONDS ?? 14);
 
-const cache = path.join(os.homedir(), 'Library/Caches/ms-playwright');
-const build = (await readdir(cache)).filter((name) => /^chromium-\d+$/.test(name)).sort().at(-1);
-const executablePath = process.env.CHROMIUM_PATH ?? path.join(cache, build, 'chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing');
-const context = await chromium.launchPersistentContext(path.join(root, '.test-profile'), {
-  executablePath,
-  headless: false,
-  viewport: { width: 1280, height: 800 },
-  args: ['--headless=new', `--disable-extensions-except=${dist}`, `--load-extension=${dist}`, '--mute-audio', '--enable-unsafe-webgpu'],
-});
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const { context, worker } = await launch();
 try {
-  const worker = context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker'));
   await worker.evaluate(() => chrome.storage.local.clear());
   for (const url of list) {
     const page = await context.newPage();

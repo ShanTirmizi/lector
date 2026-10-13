@@ -2,19 +2,10 @@
 // with the engine inside the built extension, then transcribes the audio with
 // a speech recogniser and compares the words. Also reports how fast synthesis
 // runs. Usage: node scripts/voice-check.mjs [--no-gpu]
-import { chromium } from 'playwright-core';
 import { pipeline } from '@huggingface/transformers';
-import { readdir } from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { launch } from './browser.mjs';
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const dist = path.join(root, 'dist');
 const noGpu = process.argv.includes('--no-gpu');
-const cache = path.join(os.homedir(), 'Library/Caches/ms-playwright');
-const build = (await readdir(cache)).filter((name) => /^chromium-\d+$/.test(name)).sort().at(-1);
-const executablePath = process.env.CHROMIUM_PATH ?? path.join(cache, build, 'chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing');
 
 const SAMPLES = [
   ['af_heart', 'Sleeper trains were supposed to be finished, but something changed.'],
@@ -23,16 +14,11 @@ const SAMPLES = [
   ['bf_emma', 'Still, it is hard not to feel that something worth keeping has come back.'],
 ];
 
-const context = await chromium.launchPersistentContext(path.join(root, noGpu ? '.test-profile/no-gpu' : '.test-profile'), {
-  executablePath,
-  headless: false,
-  args: ['--headless=new', `--disable-extensions-except=${dist}`, `--load-extension=${dist}`, '--mute-audio', ...(noGpu ? ['--disable-gpu', '--disable-features=WebGPU'] : ['--enable-unsafe-webgpu'])],
-});
+const { context, extension } = await launch({ profile: noGpu ? '.test-profile/no-gpu' : '.test-profile', gpu: !noGpu });
 let results;
 try {
-  const worker = context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker'));
   const page = await context.newPage();
-  await page.goto(`${worker.url().split('/').slice(0, 3).join('/')}/options.html`);
+  await page.goto(`${extension}/options.html`);
   results = await page.evaluate(async (samples) => {
     const engine = new Worker('engine-worker.js', { type: 'module' });
     let device = '';

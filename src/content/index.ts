@@ -34,15 +34,8 @@ async function handOff(open: () => Promise<void>): Promise<void> {
   };
   const launcher = new Launcher(root, () => void run());
   if (settings.launcher && !settings.disabledSites.includes(location.hostname)) launcher.show(0);
-  let retired = false;
-  document.addEventListener(
-    RETIRE,
-    () => {
-      retired = true;
-      host.remove();
-    },
-    { once: true },
-  );
+  whenRetired.push(() => host.remove());
+  if (retired) return host.remove();
   chrome.runtime.onMessage.addListener((message: ToContent) => {
     if (!retired && message.type === 'toggle') void run();
   });
@@ -53,6 +46,18 @@ async function handOff(open: () => Promise<void>): Promise<void> {
 // hear that and remove themselves.
 const RETIRE = 'lector:retire';
 document.dispatchEvent(new CustomEvent(RETIRE));
+// Start listening in the same breath, before anything asynchronous, so that two
+// copies starting together cannot both survive.
+let retired = false;
+const whenRetired: Array<() => void> = [];
+document.addEventListener(
+  RETIRE,
+  () => {
+    retired = true;
+    for (const cleanUp of whenRetired) cleanUp();
+  },
+  { once: true },
+);
 // Copies too old to know about retiring put their controls back if they are removed,
 // so what they left behind is hidden in place instead.
 for (const old of Array.from(document.querySelectorAll<HTMLElement>(HOST_TAG))) old.style.setProperty('display', 'none', 'important');

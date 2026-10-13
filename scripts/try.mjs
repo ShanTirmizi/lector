@@ -1,35 +1,19 @@
 // Tries the built extension on a real page and reports what it read.
 // Usage: node scripts/try.mjs <url> [seconds] [--headed]
 // Put "pdf:" in front of a PDF's address to open it in Lector's PDF view.
-import { chromium } from 'playwright-core';
-import { readdir } from 'node:fs/promises';
-import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { launch, root, sleep } from './browser.mjs';
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const dist = path.join(root, 'dist');
 const [url, secondsArg] = process.argv.slice(2).filter((a) => !a.startsWith('--'));
 const seconds = Number(secondsArg ?? 20);
 const headed = process.argv.includes('--headed');
 if (!url) throw new Error('Usage: node scripts/try.mjs <url> [seconds] [--headed]');
 
-const cache = path.join(os.homedir(), 'Library/Caches/ms-playwright');
-const build = (await readdir(cache)).filter((name) => /^chromium-\d+$/.test(name)).sort().at(-1);
-const executablePath = process.env.CHROMIUM_PATH ?? path.join(cache, build, 'chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing');
-
-const context = await chromium.launchPersistentContext(path.join(root, '.test-profile'), {
-  executablePath,
-  headless: false,
-  viewport: { width: 1280, height: 800 },
-  args: [...(headed ? [] : ['--headless=new']), `--disable-extensions-except=${dist}`, `--load-extension=${dist}`, '--mute-audio', '--enable-unsafe-webgpu'],
-});
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const { context, worker, extension } = await launch({ headed });
 try {
-  const worker = context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker'));
   await worker.evaluate(() => chrome.storage.local.clear());
   const page = await context.newPage();
-  const target = url.startsWith('pdf:') ? `${worker.url().split('/').slice(0, 3).join('/')}/pdf.html?file=${encodeURIComponent(url.slice(4))}` : url;
+  const target = url.startsWith('pdf:') ? `${extension}/pdf.html?file=${encodeURIComponent(url.slice(4))}` : url;
   await page.goto(target, { waitUntil: 'domcontentloaded', timeout: 60_000 });
   await page.bringToFront();
   await sleep(2500);
