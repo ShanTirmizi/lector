@@ -176,7 +176,8 @@ export class Player {
     this.nextButton.disabled = snapshot.index >= snapshot.total - 1;
 
     this.status.classList.toggle('problem', snapshot.state === 'error');
-    this.status.classList.toggle('wide', snapshot.download !== null);
+    // Wider while it holds the download progress or the "Back to the text" button.
+    this.status.classList.toggle('wide', snapshot.download !== null || (snapshot.scrollSuspended && snapshot.state !== 'error'));
     if (snapshot.scrollSuspended && snapshot.state !== 'error') {
       if (!this.status.querySelector('.back')) {
         this.status.replaceChildren(

@@ -181,7 +181,8 @@ export async function runEdge({ context, worker, command, check, waitFor, sleep,
   await command({ type: 'toggle' });
   await a.ui('.player').waitFor({ state: 'visible' });
   const kept = await a.ui('.player').boundingBox();
-  check('player position is remembered', Math.abs(kept.x - moved.x) < 30 && Math.abs(kept.y - moved.y) < 30);
+  // Compared by centre: the player's width changes with what its status line shows.
+  check('player position is remembered', Math.abs(kept.x + kept.width / 2 - (moved.x + moved.width / 2)) < 30 && Math.abs(kept.y - moved.y) < 30);
 
   // Hiding the buttons on a site.
   await a.ui('button[aria-label="Reading options"]').click();
